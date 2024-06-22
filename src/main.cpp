@@ -4,79 +4,88 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <algorithm>
 #include "routes.h"
 
 // Global Vars
 
 // Robot config
 pros::Controller master(pros::E_CONTROLLER_MASTER);
-pros::MotorGroup left_mg({1, -2, 3});    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
-pros::MotorGroup right_mg({-4, 5, -6});  // Creates a motor group with forwards port 5 and reversed ports 4 & 6
+pros::MotorGroup left_mg({-10, -12});    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
+pros::MotorGroup right_mg({9, 11});  // Creates a motor group with forwards port 5 and reversed ports 4 & 6
 pros::Motor intake(1);
 
-pros::Imu imu_sensor(1); // Replace 1 with inertial sensor port
+pros::Imu imu_sensor(21);
 
 pros::adi::Encoder side_encoder('A', 'B', false);  // Ports 'A' and 'B' for the shaft encoder
 
 // Program types
 std::string program_type = "autonomous";
-// std::string program_type = "driver"
+// std::string program_type = "driver";
 // std::string program_type = "calibrate_metrics";
 
 // Routes
-std::vector<std::vector<double>> route = test_route; // For testing purposes
-// std::vector<std::vector<double>> route = close_side;
-// std::vector<std::vector<double>> route = far_side;
-// std::vector<std::vector<double>> route = skills;
-// std::vector<std::vector<double>> route = {}; // Driver or Calibration
+std::vector<std::vector<float>> route = test_route;
+std::vector<int> vec;
+std::vector<float> vaower;
+std::vector<std::vector<int>> waieroiwa;
+// pros::lcd::print(2, "Route vals: %d, %d", route[1][0], route[1][1]);
+// std::vector<std::vector<float>> route = close_side;
+// std::vector<std::vector<float>> route = far_side;
+// std::vector<std::vector<float>> route = skills;
+// std::vector<std::vector<float>> route = {}; // Driver or Calibration
 
 
 
-double initial_heading;
+float initial_heading;
 
 // Robot parameters (needs to be tweaked later)
-const double WHEEL_DIAMETER = 4.0;  // Diameter of the wheels in inches
-const double TICKS_PER_ROTATION = 900.0;  // Encoder ticks per wheel rotation for green cartridges
-const double WHEEL_BASE_WIDTH = 12.0;  // Distance between the left and right wheels in inches
-const double DT = 0.1;  // Time step in seconds (100 ms)
+const float WHEEL_DIAMETER = 4.0;  // Diameter of the wheels in inches
+const float TICKS_PER_ROTATION = 900.0;  // Encoder ticks per wheel rotation for green cartridges
+const float WHEEL_BASE_WIDTH = 12.0;  // Distance between the left and right wheels in inches
+const float DT = 0.025;  // Time step in seconds (25 ms)
 
 // PID Code
 // PID parameters (need to be tuned)
-double kp_position = 1.0;
-double ki_position = 0.1;
-double kd_position = 0.05;
+float kp_position = 1.0;
+float ki_position = 0.0;
+float kd_position = 0.0;
 
-double kp_heading = 1.0;
-double ki_heading = 0.1;
-double kd_heading = 0.05;
+float kp_heading = .02;
+float ki_heading = 0.00;
+float kd_heading = 0.00;
 
 // Structure to store the robot's position
 struct Position {
-    double x;
-    double y;
-    double heading;
+    float x;
+    float y;
+    float heading;
 };
 
 class PIDController {
 public:
-    PIDController(double kp, double ki, double kd)
+    PIDController(float kp, float ki, float kd)
         : kp(kp), ki(ki), kd(kd), integral(0), previous_error(0) {}
 
-    double compute(double setpoint, double current_value, double dt) {
-        double error = setpoint - current_value;
+    float compute(float setpoint, float current_value, float dt) {
+        float error = setpoint - current_value;
         integral += error * dt;
-        double derivative = (error - previous_error) / dt;
+        if (integral > 5){
+            integral = 0;
+        }
+        float derivative = (error - previous_error) / dt;
         
-        double output = kp * error + ki * integral + kd * derivative;
+        float output = kp * error + ki * integral + kd * derivative;
         previous_error = error;
         
         return output;
     }
 
 private:
-    double kp, ki, kd;
-    double integral;
-    double previous_error;
+    float kp, ki, kd;
+    float integral;
+public:
+    float previous_error;
 };
 
 
@@ -86,45 +95,57 @@ PIDController heading_pid(kp_heading, ki_heading, kd_heading);
 
 
 // Function to convert encoder ticks to distance in inches
-double ticks_to_feet(int ticks) {
-    return (ticks / TICKS_PER_ROTATION) * (M_PI * WHEEL_DIAMETER) / 12;
+float ticks_to_feet(int ticks) {
+    return (ticks / TICKS_PER_ROTATION) * (M_PI * WHEEL_DIAMETER) * (7.0/5.0) / 12.0;
+}
+
+// Function to convert velocity from feet per second to RPM
+float ft_per_sec_to_rpm(float velocity_ft_per_sec) {
+    float wheel_circumference_ft = (M_PI * WHEEL_DIAMETER) / 12.0;
+    return (velocity_ft_per_sec * 60.0) / wheel_circumference_ft;
 }
 
 // Function to get the robot's current position using encoders
-Position get_robot_position(Position& current_position) {
+Position get_robot_position(Position current_position) {
     // Get the encoder values
 	std::vector<double> left_ticks = left_mg.get_position_all();
 	std::vector<double> right_ticks = right_mg.get_position_all();
 
-	int left_tick_avg = 0;
+	double left_tick_avg = 0;
 	for (auto& tick: left_ticks){
 		left_tick_avg += tick;
 	}
 	left_tick_avg /= left_ticks.size();
 
-	int right_tick_avg = 0;
+	double right_tick_avg = 0;
 	for (auto& tick: right_ticks){
 		right_tick_avg += tick;
 	}
 	right_tick_avg /= right_ticks.size();
 
-    int side_ticks = side_encoder.get_value();
+    // int side_ticks = side_encoder.get_value();
+    pros::lcd::print(0, "Tick stuff: %f, %f", left_tick_avg, right_tick_avg);
 
     // Calculate distances
-    double left_distance = ticks_to_feet(left_tick_avg);
-    double right_distance = ticks_to_feet(right_tick_avg);
-    double side_distance = ticks_to_feet(side_ticks);
+    float left_distance = ticks_to_feet(left_tick_avg);
+    float right_distance = ticks_to_feet(right_tick_avg);
+    // float side_distance = ticks_to_feet(side_ticks);
 
     // Calculate the forward and lateral displacement
-    double forward_distance = (left_distance + right_distance) / 2.0;
-    double lateral_distance = side_distance;
+    float forward_distance = (left_distance + right_distance) / 2.0;
+    float lateral_distance = 0;
+    // float lateral_distance = side_distance;
 
     // Get the current heading from the inertial sensor
-    double current_heading = imu_sensor.get_heading();
+    // float current_heading = setpoint_heading;
+    float current_heading = (-1*imu_sensor.get_heading()) + initial_heading;
+    if (current_heading < -180){
+        current_heading += 360;
+    }
 
     // Calculate the change in position
-    double delta_x = forward_distance * cos(current_heading * M_PI / 180.0) - lateral_distance * sin(current_heading * M_PI / 180.0);
-    double delta_y = forward_distance * sin(current_heading * M_PI / 180.0) + lateral_distance * cos(current_heading * M_PI / 180.0);
+    float delta_x = forward_distance * cos(current_heading * M_PI / 180.0) - lateral_distance * sin(current_heading * M_PI / 180.0);
+    float delta_y = forward_distance * sin(current_heading * M_PI / 180.0) + lateral_distance * cos(current_heading * M_PI / 180.0);
 
     // Update the total position
     current_position.x += delta_x;
@@ -139,50 +160,87 @@ Position get_robot_position(Position& current_position) {
     return current_position;
 }
 
-void apply_control_signal(double linear_velocity, double angular_velocity) {
-    double left_speed = linear_velocity - angular_velocity;
-    double right_speed = linear_velocity + angular_velocity;
-
+void apply_control_signal(float linear_velocity, float angular_velocity) {
+    float left_speed = ft_per_sec_to_rpm(linear_velocity - angular_velocity);
+    float right_speed = ft_per_sec_to_rpm(linear_velocity + angular_velocity);
+    float maxVal = std::max(left_speed, right_speed);
+    if (maxVal > 200){
+        left_speed *= (200/maxVal);
+        right_speed *= (200/maxVal);
+    }
+    pros::lcd::print(1, "Left velocity: %2.f", left_speed);
+    pros::lcd::print(2, "Right velocity: %2.f", right_speed);
     left_mg.move_velocity(left_speed);
     right_mg.move_velocity(right_speed);
 }
 
 void PID_controller(){
-	double dt = DT;  // Time step in seconds (100 ms)
+	double dt = DT;  // Time step in seconds (25 ms)
 
-    static double goal_x = 0.0;
-    static double goal_y = 0.0;
-	static double initial_heading = route[0][1];
-    Position current_position = {0.0, 0.0, 0.0};
+    double goal_x = 0.0;
+    double goal_y = 0.0;
+	initial_heading = route[1][1];
+    // pros::lcd::print(0, "Route size: %i", route.size());
+    Position current_position;
+    current_position.heading = 0;
+    current_position.y = 0;
+    current_position.x = 0;
 
     int index = 0;  // Index to iterate over the velocity_heading vector
+    bool pidding = false;
 
-    while (index < route.size()) {
+    left_mg.tare_position_all();
+    right_mg.tare_position_all();
+    side_encoder.reset();
+    pros::lcd::print(3, "Route size: %i", route.size());
+    while (index < route.size() || x_pid.previous_error > 0.2 || y_pid.previous_error > 0.2 ||
+    heading_pid.previous_error > 6) {
+        if (index == 0){
+            current_position.heading = 0;
+            current_position.y = 0;
+            current_position.x = 0;
+        }
         // Get the setpoints from the velocity_heading vector
-        if (route[index].size() > 2){
+        while (route[index].size() > 2){
             // Spin here
             intake.move(127*route[index][0]);
             // Clamp goal here
             index++;
         }
-        double setpoint_velocity = route[index][0] + initial_heading;
-        double setpoint_heading = route[index][1];
+        current_position = get_robot_position(current_position);
+        float setpoint_velocity = route[index][0];
+        float setpoint_heading = route[index][1];
+        // If we are pidding then set heading to where the endpoint is.
+        bool reverse = false;
+        if (pidding){
+            setpoint_heading = atan2(goal_y - current_position.y, goal_x - current_position.x) * (180/M_PI);
+        }
+        // Center heading around 0 degrees
+        if (setpoint_heading > 180){
+            setpoint_heading -= 360;
+        } if (setpoint_heading < -180){
+            setpoint_heading += 360;
+        }
 
         // Update the goal position based on setpoint_velocity and setpoint_heading
-        goal_x += setpoint_velocity * DT * cos(setpoint_heading * M_PI / 180.0);
-        goal_y += setpoint_velocity * DT * sin(setpoint_heading * M_PI / 180.0);
+        if (!pidding){
+            goal_x += setpoint_velocity * DT * cos(setpoint_heading * M_PI / 180.0);
+            goal_y += setpoint_velocity * DT * sin(setpoint_heading * M_PI / 180.0);
+        }
 
         // Get the current position and heading
-        current_position = get_robot_position(current_position);
+        float old_heading = route[std::max(index-1, 1)][1];
+        pros::lcd::print(5, "Headings: %f, %f", setpoint_heading, current_position.heading);
+        pros::lcd::print(6, "X positions: %f, %f", goal_x, current_position.x);
+        pros::lcd::print(7, "Y positions: %f, %f", goal_y, current_position.y);
 
         // Compute the control signals for x, y, and heading
-        double x_control_signal = x_pid.compute(goal_x, current_position.x, dt);
-        double y_control_signal = y_pid.compute(goal_y, current_position.y, dt);
-        double heading_control_signal = heading_pid.compute(setpoint_heading, current_position.heading, dt);
-
+        float x_control_signal = x_pid.compute(goal_x, current_position.x, dt);
+        float y_control_signal = y_pid.compute(goal_y, current_position.y, dt);
+        float heading_control_signal = heading_pid.compute(setpoint_heading, current_position.heading, dt);
+        pros::lcd::print(4, "Control Signals: %f, %f", x_control_signal, y_control_signal);
         // Combine x and y control signals to get the overall linear velocity
-        double linear_velocity = sqrt(pow(x_control_signal, 2) + pow(y_control_signal, 2));
-
+        float linear_velocity = sqrt(pow(x_control_signal, 2) + pow(y_control_signal, 2));
         // Apply the control signals to the motors
         apply_control_signal(linear_velocity, heading_control_signal);
 
@@ -190,57 +248,67 @@ void PID_controller(){
         pros::delay(dt * 1000);
 
         // Move to the next setpoint
-        index++;
+        if (index < route.size()-1){
+            index++;
+        } else if (x_pid.previous_error < 0.2 && y_pid.previous_error < 0.2 &&
+    heading_pid.previous_error < 6){
+            break;
+        } else {
+            pidding = true;
+        }
     }
+    left_mg.move_velocity(0);
+    right_mg.move_velocity(0);
 }
 
 // Structure to store velocity, acceleration, and jerk
 struct MotionMetrics {
-    double max_velocity;
-    double max_acceleration;
-    double max_jerk;
+    float max_velocity;
+    float max_acceleration;
+    float max_jerk;
 };
 
 // Function to measure motion metrics
 void measure_motion_metrics() {
-    std::vector<double> velocities;
-    std::vector<double> accelerations;
+    std::vector<float> velocities;
+    std::vector<float> accelerations;
 
-    double max_velocity = 0.0;
-    double max_acceleration = 0.0;
-    double max_jerk = 0.0;
+    float max_velocity = INT_MIN;
+    float max_acceleration = INT_MIN;
+    float max_jerk = INT_MIN;
 
     // Start the motors at maximum speed
     left_mg.move_velocity(200);  // Max velocity in RPM for VEX V5 motors
-    left_mg.move_velocity(200);
+    right_mg.move_velocity(200);
 
-    for (int i = 0; i < 200; ++i) {  // Run for 2 seconds (200 * 10ms)
+    for (int i = 0; i < 100; ++i) {  // Run for 2 seconds (200 * 10ms)
         std::vector<double> left_ticks = left_mg.get_position_all();
 		std::vector<double> right_ticks = right_mg.get_position_all();
 
-		int left_tick_avg = 0;
+		float left_tick_avg = 0;
 		for (auto& tick: left_ticks){
 			left_tick_avg += tick;
 		}
 		left_tick_avg /= left_ticks.size();
 
-		int right_tick_avg = 0;
+		float right_tick_avg = 0;
 		for (auto& tick: right_ticks){
 			right_tick_avg += tick;
 		}
 		right_tick_avg /= right_ticks.size();
 
-        double left_distance = ticks_to_feet(left_tick_avg);
-        double right_distance = ticks_to_feet(right_tick_avg);
+        pros::lcd::print(3, "Tick Things: ", left_tick_avg, " ", right_tick_avg);
+        float left_distance = ticks_to_feet(left_tick_avg);
+        float right_distance = ticks_to_feet(right_tick_avg);
 
-        double velocity = (left_distance + right_distance) / 2.0 / DT;
+        float velocity = (left_distance + right_distance) / 2.0 / (DT/10);
         velocities.push_back(velocity);
 
         if (velocity > max_velocity) {
             max_velocity = velocity;
         }
 
-        pros::delay(DT * 1000);  // Delay for DT seconds
+        pros::delay((DT/10) * 1000);  // Delay for DT seconds
 
         left_mg.tare_position_all();
         right_mg.tare_position_all();
@@ -252,7 +320,7 @@ void measure_motion_metrics() {
 
     // Calculate accelerations
     for (size_t i = 1; i < velocities.size(); ++i) {
-        double acceleration = (velocities[i] - velocities[i - 1]) / DT;
+        float acceleration = (velocities[i] - velocities[i - 1]) / (DT/10);
         accelerations.push_back(acceleration);
 
         if (acceleration > max_acceleration) {
@@ -262,7 +330,7 @@ void measure_motion_metrics() {
 
     // Calculate jerk
     for (size_t i = 1; i < accelerations.size(); ++i) {
-        double jerk = (accelerations[i] - accelerations[i - 1]) / DT;
+        float jerk = (accelerations[i] - accelerations[i - 1]) / (DT/10);
 
         if (jerk > max_jerk) {
             max_jerk = jerk;
@@ -304,12 +372,19 @@ void initialize() {
 
 	left_mg.set_encoder_units_all(pros::E_MOTOR_ENCODER_COUNTS);
 	right_mg.set_encoder_units_all(pros::E_MOTOR_ENCODER_COUNTS);
+    // float deez = 0.1;
+
+    // route = {{0, 0, 0}, {5.6249999999999995e-06, 38.05085596107264}, {0.22725562499999974, 38.05085596107264}, {0.8928949999999993, 38.159567111217726}, {1.692895, 38.43024831526298}, {2.4928950000000007, 38.91493645173538}, {3.2928950000000015, 39.696851129802475}, {4.0928949999999915, 40.9194867652537}, {4.892894999999903, 42.921213661711576}, {0, 0, 0}, {5.4961943749999005, 46.57578804139855}, {5.6504443749999, 54.92904809055623}, {5.354694374999901, 96.01116737516384}, {4.64134062499994, 96.01116737516384}, {3.8413406250000106, 96.01116737516384}, {3.04134062500001, 96.01116737516384}, {2.241340625000009, 96.01116737516384}, {0, 0, 0}, {1.4413406250000085, 96.01116737516384}, {0.6431631250000077, 96.01116737516384}, {0.10866312500000763, 96.01116737516384}};; // For testing purposes
+    // vec = {1};
+    // vaower = {0.1};
+    // waieroiwa = {{1, 2}, {3, 4}};
+	// pros::lcd::print(1, "vec vals: %f", d);
+	// pros::lcd::print(1, "waieroiwa vals: %i, %i", waieroiwa[1][0], waieroiwa[1][1]);
+
 
 	// Calibrate the inertial sensor
     imu_sensor.reset();
 
-  	imu_sensor.reset();
-	initial_heading = imu_sensor.get_heading();
 
 	// autonomous() // For outside of competition testing purposes
 }
@@ -380,3 +455,10 @@ void opcontrol() {
 		pros::delay(20);                               // Run for 20 ms then update
 	}
 }
+
+// int main(){
+//     for (auto& vect: route){
+//         std::cout << vect[0] << " " << vect[1] << ", ";
+//     }
+//     std::cout << "\n";
+// }
