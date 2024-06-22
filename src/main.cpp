@@ -47,7 +47,7 @@ const float DT = 0.025;  // Time step in seconds (25 ms)
 
 // PID Code
 // PID parameters (need to be tuned)
-float kp_position = 1.0;
+float kp_position = 1.25;
 float ki_position = 0.0;
 float kd_position = 0.0;
 
@@ -187,14 +187,12 @@ void PID_controller(){
     current_position.x = 0;
 
     int index = 0;  // Index to iterate over the velocity_heading vector
-    bool pidding = false;
 
     left_mg.tare_position_all();
     right_mg.tare_position_all();
     side_encoder.reset();
     pros::lcd::print(3, "Route size: %i", route.size());
-    while (index < route.size() || x_pid.previous_error > 0.2 || y_pid.previous_error > 0.2 ||
-    heading_pid.previous_error > 6) {
+    while (index < route.size()) { //  || x_pid.previous_error > 0.05 || y_pid.previous_error > 0.05 || heading_pid.previous_error > 2
         if (index == 0){
             current_position.heading = 0;
             current_position.y = 0;
@@ -202,9 +200,16 @@ void PID_controller(){
         }
         // Get the setpoints from the velocity_heading vector
         while (route[index].size() > 2){
-            // Spin here
-            intake.move(127*route[index][0]);
+            // Turn here
+            intake.move(127*route[index][0]); // Move here
             // Clamp goal here
+
+            if (route[index][3] != 0){
+                left_mg.move_velocity(0);
+                right_mg.move_velocity(0);
+            }
+            pros::delay(route[index][3]*1000); // Wait for time
+
             index++;
         }
         current_position = get_robot_position(current_position);
@@ -212,9 +217,6 @@ void PID_controller(){
         float setpoint_heading = route[index][1];
         // If we are pidding then set heading to where the endpoint is.
         bool reverse = false;
-        if (pidding){
-            setpoint_heading = atan2(goal_y - current_position.y, goal_x - current_position.x) * (180/M_PI);
-        }
         // Center heading around 0 degrees
         if (setpoint_heading > 180){
             setpoint_heading -= 360;
@@ -223,16 +225,14 @@ void PID_controller(){
         }
 
         // Update the goal position based on setpoint_velocity and setpoint_heading
-        if (!pidding){
-            goal_x += setpoint_velocity * DT * cos(setpoint_heading * M_PI / 180.0);
-            goal_y += setpoint_velocity * DT * sin(setpoint_heading * M_PI / 180.0);
-        }
+        goal_x += setpoint_velocity * DT * cos(setpoint_heading * M_PI / 180.0);
+        goal_y += setpoint_velocity * DT * sin(setpoint_heading * M_PI / 180.0);
 
         // Get the current position and heading
         float old_heading = route[std::max(index-1, 1)][1];
         pros::lcd::print(5, "Headings: %f, %f", setpoint_heading, current_position.heading);
-        pros::lcd::print(6, "X positions: %f, %f", goal_x, current_position.x);
-        pros::lcd::print(7, "Y positions: %f, %f", goal_y, current_position.y);
+        pros::lcd::print(6, "X positions: %f, %f", goal_x*12, current_position.x*12);
+        pros::lcd::print(7, "Y positions: %f, %f", goal_y*12, current_position.y*12);
 
         // Compute the control signals for x, y, and heading
         float x_control_signal = x_pid.compute(goal_x, current_position.x, dt);
@@ -248,14 +248,7 @@ void PID_controller(){
         pros::delay(dt * 1000);
 
         // Move to the next setpoint
-        if (index < route.size()-1){
-            index++;
-        } else if (x_pid.previous_error < 0.2 && y_pid.previous_error < 0.2 &&
-    heading_pid.previous_error < 6){
-            break;
-        } else {
-            pidding = true;
-        }
+        index++;
     }
     left_mg.move_velocity(0);
     right_mg.move_velocity(0);
