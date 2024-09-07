@@ -1,11 +1,11 @@
 #include "main.h"
+#include "routes.h"
 #include <iostream>
 #include <fstream>
 #include <string>
 #include <sstream>
 #include <vector>
 #include <algorithm>
-#include "routes.h"
 
 // Global Vars
 
@@ -23,16 +23,12 @@ pros::Imu imu_sensor(21);
 pros::adi::Encoder side_encoder('A', 'B', false);  // Ports 'A' and 'B' for the shaft encoder
 
 // Program types
-std::string program_type = "autonomous";
 // std::string program_type = "driver";
+std::string program_type = "autonomous";
 // std::string program_type = "calibrate_metrics";
 
 // Routes
 std::vector<std::vector<float>> route = testroute5;
-std::vector<int> vec;
-std::vector<float> vaower;
-std::vector<std::vector<int>> waieroiwa;
-// pros::lcd::print(2, "Route vals: %d, %d", route[1][0], route[1][1]);
 // std::vector<std::vector<float>> route = close_side;
 // std::vector<std::vector<float>> route = far_side;
 // std::vector<std::vector<float>> route = skills;
@@ -44,12 +40,13 @@ float initial_heading;
 
 // Robot parameters (needs to be tweaked later)
 const float WHEEL_DIAMETER = 4.0;  // Diameter of the wheels in inches
+// TODO update for blue cartridges on new bot
 const float TICKS_PER_ROTATION = 900.0;  // Encoder ticks per wheel rotation for green cartridges
 const float WHEEL_BASE_WIDTH = 12.0;  // Distance between the left and right wheels in inches
 const float DT = 0.025;  // Time step in seconds (25 ms)
 
 // PID Code
-// PID parameters (need to be tuned)
+// PID parameters (need to be tuned, especially heading)
 float kp_position = 1.48;
 float ki_position = 0.14;
 float kd_position = 0.3;
@@ -73,7 +70,7 @@ public:
     float compute(float setpoint, float current_value, float dt) {
         float error = setpoint - current_value;
         integral += error * dt;
-        if (integral > 5){ // Anti integral wind up
+        if (integral > 5){ // Anti integral wind up, may need tweaking
             integral = 0;
         }
         float derivative = (error - previous_error) / dt;
@@ -115,6 +112,7 @@ Position get_robot_position(Position current_position) {
 	std::vector<double> left_ticks = left_mg.get_position_all();
 	std::vector<double> right_ticks = right_mg.get_position_all();
 
+    // Calculate averages of every motor's tracked ticks
 	double left_tick_avg = 0;
 	for (auto& tick: left_ticks){
 		left_tick_avg += tick;
@@ -167,7 +165,7 @@ Position get_robot_position(Position current_position) {
 void apply_control_signal(float linear_velocity, float angular_velocity) {
     float left_speed = ft_per_sec_to_rpm(linear_velocity - angular_velocity);
     float right_speed = ft_per_sec_to_rpm(linear_velocity + angular_velocity);
-    // Don't think we need this stuff anymore hopefully
+    // Don't think we need this stuff anymore hopefully, I'll keep it for now just in case
     // float maxVal = std::max(left_speed, right_speed);
     // if (maxVal > 200){
     //     left_speed *= (200/maxVal);
@@ -206,7 +204,7 @@ void PID_controller(){
             current_position.x = 0;
         }
         // Get the setpoints from the velocity_heading vector
-        while (route[index].size() > 2){
+        while (route[index].size() > 2){ // Normal is {velo, heading} if we have more in sub vector then it is a node
             // Turn here
             intake.move(127*route[index][0]); // Move here
             // Clamp goal here
@@ -227,7 +225,7 @@ void PID_controller(){
         current_position = get_robot_position(current_position);
         float setpoint_velocity = route[index][0];
         float setpoint_heading = route[index][1];
-        // If we are pidding then set heading to where the endpoint is.
+
         // Center heading around 0 degrees
         if (setpoint_heading > 180){
             setpoint_heading -= 360;
@@ -331,7 +329,7 @@ void measure_motion_metrics() {
 
     // Calculate accelerations
     for (size_t i = 1; i < velocities.size(); ++i) {
-        float acceleration = (velocities[i] - velocities[i - 1]) / (DT/10);
+        float acceleration = (velocities[i] - velocities[i - 1]) / (DT/10); // Was I high when I wrote this?
         accelerations.push_back(acceleration);
 
         if (acceleration > max_acceleration) {
@@ -340,8 +338,8 @@ void measure_motion_metrics() {
     }
 
     // Calculate jerk
-    for (size_t i = 1; i < accelerations.size(); ++i) {
-        float jerk = (accelerations[i] - accelerations[i - 1]) / (DT/10);
+    for (size_t i = 1; i < accelerations.size(); ++i) { // Don't calculate max jerk lmao
+        float jerk = (accelerations[i] - accelerations[i - 1]) / (DT/10); // Same with this lmao wtf?
 
         if (jerk > max_jerk) {
             max_jerk = jerk;
@@ -384,19 +382,9 @@ void initialize() {
 	left_mg.set_encoder_units_all(pros::E_MOTOR_ENCODER_COUNTS);
 	right_mg.set_encoder_units_all(pros::E_MOTOR_ENCODER_COUNTS);
     // pinMode(1, OUTPUT);
-    // float deez = 0.1;
-
-    // route = {{0, 0, 0}, {5.6249999999999995e-06, 38.05085596107264}, {0.22725562499999974, 38.05085596107264}, {0.8928949999999993, 38.159567111217726}, {1.692895, 38.43024831526298}, {2.4928950000000007, 38.91493645173538}, {3.2928950000000015, 39.696851129802475}, {4.0928949999999915, 40.9194867652537}, {4.892894999999903, 42.921213661711576}, {0, 0, 0}, {5.4961943749999005, 46.57578804139855}, {5.6504443749999, 54.92904809055623}, {5.354694374999901, 96.01116737516384}, {4.64134062499994, 96.01116737516384}, {3.8413406250000106, 96.01116737516384}, {3.04134062500001, 96.01116737516384}, {2.241340625000009, 96.01116737516384}, {0, 0, 0}, {1.4413406250000085, 96.01116737516384}, {0.6431631250000077, 96.01116737516384}, {0.10866312500000763, 96.01116737516384}};; // For testing purposes
-    // vec = {1};
-    // vaower = {0.1};
-    // waieroiwa = {{1, 2}, {3, 4}};
-	// pros::lcd::print(1, "vec vals: %f", d);
-	// pros::lcd::print(1, "waieroiwa vals: %i, %i", waieroiwa[1][0], waieroiwa[1][1]);
-
 
 	// Calibrate the inertial sensor
     imu_sensor.reset();
-
 
 	// autonomous() // For outside of competition testing purposes
 }
@@ -433,9 +421,9 @@ void competition_initialize() {
  * from where it left off.
  */
 void autonomous() {
-	if (program_type == "calibrate_metrics"){
+	if (program_type == "calibrate_metrics"){ // Extremely broken function lol
 		measure_motion_metrics();
-	} else {
+	} else if (program_type == "autonomous"){
     	PID_controller();
 	}
 }
@@ -488,10 +476,3 @@ void opcontrol() {
 		pros::delay(20);                               // Run for 20 ms then update
 	}
 }
-
-// int main(){
-//     for (auto& vect: route){
-//         std::cout << vect[0] << " " << vect[1] << ", ";
-//     }
-//     std::cout << "\n";
-// }
