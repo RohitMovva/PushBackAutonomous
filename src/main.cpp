@@ -167,11 +167,12 @@ Position get_robot_position(Position current_position) {
 void apply_control_signal(float linear_velocity, float angular_velocity) {
     float left_speed = ft_per_sec_to_rpm(linear_velocity - angular_velocity);
     float right_speed = ft_per_sec_to_rpm(linear_velocity + angular_velocity);
-    float maxVal = std::max(left_speed, right_speed);
-    if (maxVal > 200){
-        left_speed *= (200/maxVal);
-        right_speed *= (200/maxVal);
-    }
+    // Don't think we need this stuff anymore hopefully
+    // float maxVal = std::max(left_speed, right_speed);
+    // if (maxVal > 200){
+    //     left_speed *= (200/maxVal);
+    //     right_speed *= (200/maxVal);
+    // }
     pros::lcd::print(1, "Left velocity: %2.f", left_speed);
     pros::lcd::print(2, "Right velocity: %2.f", right_speed);
     left_mg.move_velocity(left_speed);
@@ -197,6 +198,7 @@ void PID_controller(){
     side_encoder.reset();
     pros::lcd::print(3, "Route size: %i", route.size());
     bool correcting_heading = false;
+    bool reversed = false;
     while (index < route.size()) { //  || x_pid.previous_error > 0.05 || y_pid.previous_error > 0.05 || heading_pid.previous_error > 2
         if (index == 0){
             current_position.heading = 0;
@@ -209,7 +211,12 @@ void PID_controller(){
             intake.move(127*route[index][0]); // Move here
             // Clamp goal here
 
-            if (route[index][4] != 0){
+            if (route[index][2] == 1){
+                reversed = !reversed; // Toggle reverse
+                self.current_position.heading -= 180; // We are going in the other direction now, need to flip headings to match with target headings
+            }
+
+            if (route[index][4] != 0){ // Double check if we need this part
                 left_mg.move_velocity(0);
                 right_mg.move_velocity(0);
             }
@@ -221,7 +228,6 @@ void PID_controller(){
         float setpoint_velocity = route[index][0];
         float setpoint_heading = route[index][1];
         // If we are pidding then set heading to where the endpoint is.
-        bool reverse = false;
         // Center heading around 0 degrees
         if (setpoint_heading > 180){
             setpoint_heading -= 360;
@@ -249,6 +255,10 @@ void PID_controller(){
         // pros::lcd::print(4, "Control Signals: %f, %f", x_control_signal, y_control_signal);
         // Combine x and y control signals to get the overall linear velocity
         float linear_velocity = sqrt(pow(x_control_signal, 2) + pow(y_control_signal, 2));
+        if (reversed){ // Check this since there is a good chance this is incorrect
+            linear_velocity *= -1
+            heading_control_signal *= -1
+        }
         // Apply the control signals to the motors
         apply_control_signal(linear_velocity, heading_control_signal);
 
@@ -257,17 +267,6 @@ void PID_controller(){
 
         // Move to the next setpoint
         index++;
-        // if (abs(heading_pid.previous_error) < 1e9){
-        //     index++;
-        //     correcting_heading = false;
-        // } else {
-        //     correcting_heading = true;
-        // }
-        // if (!(x_pid.previous_error > 1 || y_pid.previous_error > 1 || heading_pid.previous_error > 5)){
-        //     index++;
-        // } else {
-        //     index++;
-        // }
     }
     left_mg.move_velocity(0);
     right_mg.move_velocity(0);
