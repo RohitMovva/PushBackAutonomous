@@ -13,7 +13,10 @@
 pros::Controller master(pros::E_CONTROLLER_MASTER);
 pros::MotorGroup left_mg({-10, -12});    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
 pros::MotorGroup right_mg({9, 11});  // Creates a motor group with forwards port 5 and reversed ports 4 & 6
-pros::Motor intake(1);
+pros::Motor intake(6);
+const int GOAL_CLAMP_PORT = 8;
+pros::ADIDigitalOut sensor (GOAL_CLAMP_PORT, LOW);
+bool clampState = LOW;
 
 pros::Imu imu_sensor(21);
 
@@ -25,7 +28,7 @@ std::string program_type = "autonomous";
 // std::string program_type = "calibrate_metrics";
 
 // Routes
-std::vector<std::vector<float>> route = test_route;
+std::vector<std::vector<float>> route = testroute5;
 std::vector<int> vec;
 std::vector<float> vaower;
 std::vector<std::vector<int>> waieroiwa;
@@ -47,13 +50,13 @@ const float DT = 0.025;  // Time step in seconds (25 ms)
 
 // PID Code
 // PID parameters (need to be tuned)
-float kp_position = 1.25;
-float ki_position = 0.0;
-float kd_position = 0.0;
+float kp_position = 1.48;
+float ki_position = 0.14;
+float kd_position = 0.3;
 
-float kp_heading = .02;
-float ki_heading = 0.00;
-float kd_heading = 0.00;
+float kp_heading = .0375;
+float ki_heading = 0.0;
+float kd_heading = 0.0;
 
 // Structure to store the robot's position
 struct Position {
@@ -64,13 +67,13 @@ struct Position {
 
 class PIDController {
 public:
-    PIDController(float kp, float ki, float kd)
-        : kp(kp), ki(ki), kd(kd), integral(0), previous_error(0) {}
+    PIDController(float kp, float ki, float kd, float intergral_max=5)
+        : kp(kp), ki(ki), kd(kd), integral(0), previous_error(0), intergral_max(intergral_max) {}
 
     float compute(float setpoint, float current_value, float dt) {
         float error = setpoint - current_value;
         integral += error * dt;
-        if (integral > 5){
+        if (integral > 5){ // Anti integral wind up
             integral = 0;
         }
         float derivative = (error - previous_error) / dt;
@@ -84,6 +87,7 @@ public:
 private:
     float kp, ki, kd;
     float integral;
+    float intergral_max;
 public:
     float previous_error;
 };
@@ -192,6 +196,7 @@ void PID_controller(){
     right_mg.tare_position_all();
     side_encoder.reset();
     pros::lcd::print(3, "Route size: %i", route.size());
+    bool correcting_heading = false;
     while (index < route.size()) { //  || x_pid.previous_error > 0.05 || y_pid.previous_error > 0.05 || heading_pid.previous_error > 2
         if (index == 0){
             current_position.heading = 0;
@@ -204,11 +209,11 @@ void PID_controller(){
             intake.move(127*route[index][0]); // Move here
             // Clamp goal here
 
-            if (route[index][3] != 0){
+            if (route[index][4] != 0){
                 left_mg.move_velocity(0);
                 right_mg.move_velocity(0);
             }
-            pros::delay(route[index][3]*1000); // Wait for time
+            pros::delay(route[index][4]*1000); // Wait for time
 
             index++;
         }
@@ -225,12 +230,14 @@ void PID_controller(){
         }
 
         // Update the goal position based on setpoint_velocity and setpoint_heading
-        goal_x += setpoint_velocity * DT * cos(setpoint_heading * M_PI / 180.0);
-        goal_y += setpoint_velocity * DT * sin(setpoint_heading * M_PI / 180.0);
+        if (!correcting_heading){
+            goal_x += setpoint_velocity * DT * cos(setpoint_heading * M_PI / 180.0);
+            goal_y += setpoint_velocity * DT * sin(setpoint_heading * M_PI / 180.0);
+        }
 
         // Get the current position and heading
         float old_heading = route[std::max(index-1, 1)][1];
-        pros::lcd::print(5, "Headings: %f, %f", setpoint_heading, current_position.heading);
+        pros::lcd::print(5, "Headings: %f, %f, %f", setpoint_heading, current_position.heading, old_heading);
         pros::lcd::print(6, "X positions: %f, %f", goal_x*12, current_position.x*12);
         pros::lcd::print(7, "Y positions: %f, %f", goal_y*12, current_position.y*12);
 
@@ -238,7 +245,8 @@ void PID_controller(){
         float x_control_signal = x_pid.compute(goal_x, current_position.x, dt);
         float y_control_signal = y_pid.compute(goal_y, current_position.y, dt);
         float heading_control_signal = heading_pid.compute(setpoint_heading, current_position.heading, dt);
-        pros::lcd::print(4, "Control Signals: %f, %f", x_control_signal, y_control_signal);
+        pros::lcd::print(4, "Index: %i", index);
+        // pros::lcd::print(4, "Control Signals: %f, %f", x_control_signal, y_control_signal);
         // Combine x and y control signals to get the overall linear velocity
         float linear_velocity = sqrt(pow(x_control_signal, 2) + pow(y_control_signal, 2));
         // Apply the control signals to the motors
@@ -249,6 +257,17 @@ void PID_controller(){
 
         // Move to the next setpoint
         index++;
+        // if (abs(heading_pid.previous_error) < 1e9){
+        //     index++;
+        //     correcting_heading = false;
+        // } else {
+        //     correcting_heading = true;
+        // }
+        // if (!(x_pid.previous_error > 1 || y_pid.previous_error > 1 || heading_pid.previous_error > 5)){
+        //     index++;
+        // } else {
+        //     index++;
+        // }
     }
     left_mg.move_velocity(0);
     right_mg.move_velocity(0);
@@ -365,6 +384,7 @@ void initialize() {
 
 	left_mg.set_encoder_units_all(pros::E_MOTOR_ENCODER_COUNTS);
 	right_mg.set_encoder_units_all(pros::E_MOTOR_ENCODER_COUNTS);
+    // pinMode(1, OUTPUT);
     // float deez = 0.1;
 
     // route = {{0, 0, 0}, {5.6249999999999995e-06, 38.05085596107264}, {0.22725562499999974, 38.05085596107264}, {0.8928949999999993, 38.159567111217726}, {1.692895, 38.43024831526298}, {2.4928950000000007, 38.91493645173538}, {3.2928950000000015, 39.696851129802475}, {4.0928949999999915, 40.9194867652537}, {4.892894999999903, 42.921213661711576}, {0, 0, 0}, {5.4961943749999005, 46.57578804139855}, {5.6504443749999, 54.92904809055623}, {5.354694374999901, 96.01116737516384}, {4.64134062499994, 96.01116737516384}, {3.8413406250000106, 96.01116737516384}, {3.04134062500001, 96.01116737516384}, {2.241340625000009, 96.01116737516384}, {0, 0, 0}, {1.4413406250000085, 96.01116737516384}, {0.6431631250000077, 96.01116737516384}, {0.10866312500000763, 96.01116737516384}};; // For testing purposes
@@ -435,16 +455,37 @@ void autonomous() {
  * task, not resume it from where it left off.
  */
 void opcontrol() {
+    bool fired = false;
 	while (true) {
 		pros::lcd::print(0, "%d %d %d", (pros::lcd::read_buttons() & LCD_BTN_LEFT) >> 2,
 		                 (pros::lcd::read_buttons() & LCD_BTN_CENTER) >> 1,
 		                 (pros::lcd::read_buttons() & LCD_BTN_RIGHT) >> 0);  // Prints status of the emulated screen LCDs
-
+        
 		// Arcade control scheme
 		int dir = master.get_analog(ANALOG_LEFT_Y);    // Gets amount forward/backward from left joystick
 		int turn = master.get_analog(ANALOG_RIGHT_X);  // Gets the turn left/right from right joystick
-		left_mg.move(dir - turn);                      // Sets left motor voltage
-		right_mg.move(dir + turn);                     // Sets right motor voltage
+		left_mg.move(dir + turn);                      // Sets left motor voltage
+		right_mg.move(dir - turn);                     // Sets right motor voltage
+
+
+        if (master.get_digital(DIGITAL_L1)){
+            intake.move_velocity(200);
+        } else if (master.get_digital(DIGITAL_L2)){
+            intake.move_velocity(-200);
+        }  else {
+            intake.move_velocity(0);
+        }
+
+        if (master.get_digital(DIGITAL_R1)){
+            if (!fired){
+                sensor.set_value(clampState);
+                clampState = !clampState;
+            }
+            fired = true;
+        } else{
+            fired = false;
+        }
+        
 		pros::delay(20);                               // Run for 20 ms then update
 	}
 }
