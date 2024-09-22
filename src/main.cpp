@@ -37,6 +37,7 @@ std::vector<std::vector<float>> route = testroute5;
 
 
 float initial_heading;
+// pair<float> initial_coordinate;
 
 // Robot parameters (needs to be tweaked later)
 const float WHEEL_DIAMETER = 4.0;  // Diameter of the wheels in inches
@@ -182,12 +183,13 @@ void PID_controller(){
 
     double goal_x = 0.0;
     double goal_y = 0.0;
-	initial_heading = route[1][1];
+	initial_heading = route[1][2];
+	// initial_coordinates = std::make_pair(route[1][0], route[1][1]);
     // pros::lcd::print(0, "Route size: %i", route.size());
     Position current_position;
     current_position.heading = 0;
-    current_position.y = 0;
-    current_position.x = 0;
+    current_position.y = route[1][1] / 12.0;
+    current_position.x = route[1][0] / 12.0;
 
     int index = 0;  // Index to iterate over the velocity_heading vector
 
@@ -200,11 +202,11 @@ void PID_controller(){
     while (index < route.size()) { //  || x_pid.previous_error > 0.05 || y_pid.previous_error > 0.05 || heading_pid.previous_error > 2
         if (index == 0){
             current_position.heading = 0;
-            current_position.y = 0;
-            current_position.x = 0;
+            current_position.y = route[1][1] / 12.0;
+            current_position.x = route[1][0] / 12.0;
         }
         // Get the setpoints from the velocity_heading vector
-        while (route[index].size() > 2){ // Normal is {velo, heading} if we have more in sub vector then it is a node
+        while (route[index].size() > 3){ // Normal is {x, y, heading} if we have more in sub vector then it is a node
             // Turn here
             intake.move(127*route[index][0]); // Move here
             // Clamp goal here
@@ -223,8 +225,11 @@ void PID_controller(){
             index++;
         }
         current_position = get_robot_position(current_position);
-        float setpoint_velocity = route[index][0];
-        float setpoint_heading = route[index][1];
+        // float setpoint_velocity = route[index][0];
+        // float setpoint_heading = route[index][1];
+        goal_x = route[index][0] / 12.0;
+        goal_y = route[index][1] / 12.0;
+        float setpoint_heading = route[index][2];
 
         // Center heading around 0 degrees
         if (setpoint_heading > 180){
@@ -233,11 +238,11 @@ void PID_controller(){
             setpoint_heading += 360;
         }
 
-        // Update the goal position based on setpoint_velocity and setpoint_heading
-        if (!correcting_heading){
-            goal_x += setpoint_velocity * DT * cos(setpoint_heading * M_PI / 180.0);
-            goal_y += setpoint_velocity * DT * sin(setpoint_heading * M_PI / 180.0);
-        }
+        // // Update the goal position based on setpoint_velocity and setpoint_heading
+        // if (!correcting_heading){
+        //     goal_x += setpoint_velocity * DT * cos(setpoint_heading * M_PI / 180.0);
+        //     goal_y += setpoint_velocity * DT * sin(setpoint_heading * M_PI / 180.0);
+        // }
 
         // Get the current position and heading
         float old_heading = route[std::max(index-1, 1)][1];
