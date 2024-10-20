@@ -50,6 +50,7 @@ std::vector<std::vector<float>> route = osolo_awp;
 float initial_x;
 float initial_y;
 float initial_heading;
+// pair<float> initial_coordinate;
 
 // Robot parameters (needs to be tweaked later)
 const float WHEEL_DIAMETER = 2.75;  // Diameter of the wheels in inches
