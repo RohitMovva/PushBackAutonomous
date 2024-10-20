@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "autonomous",
+    "project_name": "rsolo_awp",
     "target": "v5",
     "templates": {
       "kernel": {
@@ -255,7 +255,8 @@
       }
     },
     "upload_options": {
-      "icon": "X"
+      "icon": "X",
+      "slot": 1
     },
     "use_early_access": false
   }
