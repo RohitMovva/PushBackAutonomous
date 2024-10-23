@@ -36,7 +36,7 @@ std::string program_type = "autonomous";
 // std::string program_type = "calibrate_metrics";
 
 // Routes
-std::vector<std::vector<float>> route = osolo_awp;
+std::vector<std::vector<float>> route = mirrored_osolo_awp;
 // std::vector<std::vector<float>> route = mirrored_solo_awp;
 // std::vector<std::vector<float>> route = mogo_rush;
 // std::vector<std::vector<float>> route = mirrored_mogo_side;
@@ -458,8 +458,12 @@ void PID_controller(){
         float heading_control_signal = heading_pid.compute(setpoint_heading, current_position.heading, dt, true);
 
         pros::lcd::print(4, "Control Signals: %f, %f, %f", x_control_signal, y_control_signal, heading_control_signal);
+       
         // Combine x and y control signals to get the overall linear velocity
         float linear_velocity = sqrt(pow(x_control_signal, 2) + pow(y_control_signal, 2));
+        if ((goal_x > current_position.x) && (goal_y > current_position.y)){
+            
+        }
         if (reversed){
             linear_velocity *= -1;
         }

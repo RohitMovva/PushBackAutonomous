@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "rsolo_awp",
+    "project_name": "bsolo_awp",
     "target": "v5",
     "templates": {
       "kernel": {
@@ -256,7 +256,7 @@
     },
     "upload_options": {
       "icon": "X",
-      "slot": 1
+      "slot": 2
     },
     "use_early_access": false
   }
