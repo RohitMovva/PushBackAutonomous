@@ -27,7 +27,6 @@ float prev_heading;
 pros::Imu imu_sensor(5);
 
 pros::adi::Encoder side_encoder('A', 'B', false);  // Ports 'A' and 'B' for the shaft encoder
-
 // Program types
 // std::string program_type = "driver";
 // std::string program_type = "autonomous";
@@ -36,7 +35,7 @@ std::string program_type = "autonomous";
 // std::string program_type = "calibrate_metrics";
 
 // Routes
-std::vector<std::vector<float>> route = mirrored_osolo_awp;
+std::vector<std::vector<float>> route = auton_skills;
 // std::vector<std::vector<float>> route = mirrored_solo_awp;
 // std::vector<std::vector<float>> route = mogo_rush;
 // std::vector<std::vector<float>> route = mirrored_mogo_side;
@@ -455,6 +454,33 @@ void PID_controller(){
         // Compute the control signals for x, y, and heading
         float x_control_signal = x_pid.compute(goal_x, current_position.x, dt);
         float y_control_signal = y_pid.compute(goal_y, current_position.y, dt);
+
+        if (current_position.heading > 0 && current_position.heading < 90
+        ){
+            if (current_position.x - goal_x > 0){
+                x_control_signal *= 0.5;
+            } if (current_position.y - goal_y > 0){
+                y_control_signal *= 0.5;
+            }
+        } if (current_position.heading < 180 && current_position.heading > 90){
+            if (current_position.x - goal_x < 0){
+                x_control_signal *= 0.5;
+            } if (current_position.y - goal_y > 0){
+                y_control_signal *= 0.5;
+            }
+        } if (current_position.heading < -90 && current_position.heading > -180){
+            if (current_position.x - goal_x < 0){
+                x_control_signal *= 0.5;
+            } if (current_position.y - goal_y < 0){
+                y_control_signal *= 0.5;
+            }
+        } if (current_position.heading < 0 && current_position.heading > -90){
+            if (current_position.x - goal_x > 0){
+                x_control_signal *= 0.5;
+            } if (current_position.y - goal_y < 0){
+                y_control_signal *= 0.5;
+            }
+        }
         float heading_control_signal = heading_pid.compute(setpoint_heading, current_position.heading, dt, true);
 
         pros::lcd::print(4, "Control Signals: %f, %f, %f", x_control_signal, y_control_signal, heading_control_signal);
