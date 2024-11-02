@@ -26,7 +26,7 @@ class DrivetrainController {
 
         // Constants for your specific robot
         const double WHEEL_DIAMETER = 2.75;  // inches
-        const double GEAR_RATIO = 1.33;      // 600 RPM to 450 RPM
+        const double GEAR_RATIO = 48.0/36.0;      // 600 RPM to 450 RPM
         const double MAX_RPM = 450;          // Output RPM
         
         // Conversion factors

@@ -145,7 +145,7 @@ float ft_per_sec_to_rpm(float velocity_ft_per_sec) {
 }
 
 // Function to get the robot's current position using encoders
-Position get_robot_position(Position current_position, bool reverse, bool is_challenged=false, float setpoint_heading=NULL) {
+Position get_robot_position(Position current_position, bool reverse, float setpoint_heading=NULL) {
     // Get the encoder values
 	std::vector<double> left_ticks = left_mg.get_position_all();
 	std::vector<double> right_ticks = right_mg.get_position_all();
@@ -181,12 +181,7 @@ Position get_robot_position(Position current_position, bool reverse, bool is_cha
     float current_heading;
     if (setpoint_heading == NULL){
         // current_heading = -1*(float(imu_sensor.get_heading()) - initial_heading);
-        if (is_challenged){
-            current_heading = -1*(float(imu_sensor.get_heading()) - initial_heading) - 90;
-
-        } else {
-            current_heading = -1*(float(imu_sensor.get_heading()) - initial_heading);
-        }
+        current_heading = -1*(float(imu_sensor.get_heading()) - initial_heading);
     } else {
         current_heading = setpoint_heading;
     }
@@ -369,7 +364,6 @@ void PID_controller(){
     bool reversed = false;
     bool mogo_mech_state = LOW;
     int kill_timer = -1;
-    bool special_help_reverse = false;
     while (index < route.size()) { //  || x_pid.previous_error > 0.05 || y_pid.previous_error > 0.05 || heading_pid.previous_error > 2
         // if (kill_timer == 0) break;
         if (index == 0){
@@ -420,7 +414,7 @@ void PID_controller(){
         if (index == route.size()){
             break;
         }
-        current_position = get_robot_position(current_position, reversed, special_help_reverse);
+        current_position = get_robot_position(current_position, reversed);
         if (reversed){
             current_position.heading -= 180;
             if (current_position.heading < -180){
