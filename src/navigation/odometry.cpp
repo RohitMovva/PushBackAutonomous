@@ -14,6 +14,18 @@ Velocity::Velocity(double linear, double angular)
 {
 }
 
+
+// TODO make these static methods in odom class
+double normalizeAngle(double angle) {
+    while (angle > M_PI) angle -= 2 * M_PI;
+    while (angle < -M_PI) angle += 2 * M_PI;
+    return angle;
+}
+
+double angleDifference(double a, double b) {
+    return normalizeAngle(a - b);
+}
+
 // Odometry implementation
 Odometry::Odometry(pros::MotorGroup& left, pros::MotorGroup& right,
                    pros::Rotation& lateral, pros::Imu& imuSensor,

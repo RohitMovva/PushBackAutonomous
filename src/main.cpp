@@ -835,10 +835,8 @@ void autonomous() {
 }
 
 int joystickCurve(int x, double a=2.5){
-    // pros::lcd::print(0, "x: %d, a: %f", x, a);
-    // pros::lcd::print(1, "thingy: %f, otherthingy: %f", 127.0 * std::pow(std::abs(a), double(x)), (std::pow(127.0, double(a))));
     return 
-    int(((127.0 * std::pow(std::abs(a), double(x)))/(std::pow(127.0, double(a))))
+    int(((127.0 * std::pow(double(x), std::abs(a)))/(std::pow(127.0, a)))
      * (double(x)/std::abs(double(x))));
 }
 
@@ -862,27 +860,12 @@ void opcontrol() {
     bool intake_forward = false;
     bool intake_reverse = false;
 	while (true) {
-		// pros::lcd::print(0, "HALLO %d %d %d", (pros::lcd::read_buttons() & LCD_BTN_LEFT) >> 2,
-		                //  (pros::lcd::read_buttons() & LCD_BTN_CENTER) >> 1,
-		                //  (pros::lcd::read_buttons() & LCD_BTN_RIGHT) >> 0);  // Prints status of the emulated screen LCDs
-        
 		// Arcade control scheme
 		int dir = (master.get_analog(ANALOG_LEFT_Y));    // Gets amount forward/backward from left joystick
 		int turn = master.get_analog(ANALOG_RIGHT_X);  // Gets the turn left/right from right joystick
 		left_mg.move(dir + turn);                      // Sets left motor voltage
 		right_mg.move(dir - turn);                     // Sets right motor voltage
 
-        // pros::lcd::print(2, "thingy: %d, otherthingy: %d", dir, turn);
-        // pros::lcd::print(3, "PLEASE WORKY: " + char(master.get_digital(DIGITAL_B)), + char(hang_deployed));
-        //if (master.get_digital(DIGITAL_L1)){
-        //     if (!fired){
-        //         mogo_mech.set_value(clampState);
-        //         clampState = !clampState;
-        //     }
-        //     fired = true;
-        // } else {
-        //     fired = false;
-        // }
         if (master.get_digital(DIGITAL_R1)){
             if (!intake_forward){
                 intake.move_velocity(200);
@@ -904,10 +887,6 @@ void opcontrol() {
             if (!fired){
                 if (clampState){
                     master.rumble("-");
-                    master.set_text(0, 0, "███████████████");
-                    master.set_text(1, 0, "███████████████");
-                    master.set_text(2, 0, "███████████████");
-                    // master.set_text(0, 0, "███████████████");
                 } else {
                     master.clear_line(0);
                     master.clear_line(1);
@@ -927,7 +906,6 @@ void opcontrol() {
             
         } else {
             pros::screen::set_pen(pros::Color::green);
-            // pros::screen::fill_rect(5,5,240,200);
         }
 
         if (master.get_digital(DIGITAL_B) && !hang_deployed){
