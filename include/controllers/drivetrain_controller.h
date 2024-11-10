@@ -31,8 +31,8 @@ public:
      * @param kI Integral gain for PID
      * @param kD Derivative gain for PID
      */
-    DrivetrainController(double kS, double kV, double kA,
-                        double kP, double kI, double kD);
+    DrivetrainController(double kS=5.0, double kV=0.2, double kA=0.05,
+                        double kP=0.1, double kI=0.001, double kD=0.01);
 
     /**
      * @brief Convert linear velocity to encoder ticks
