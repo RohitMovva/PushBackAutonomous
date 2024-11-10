@@ -110,3 +110,7 @@ void Kalman2D::update(double meas_x, double meas_y) {
 std::vector<double> Kalman2D::getState() const {
     return x;
 }
+
+std::vector<std::vector<double>> Kalman2D::getCovarianceMatrix() const {
+    return P;
+}

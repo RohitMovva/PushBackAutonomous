@@ -1,6 +1,9 @@
 #include "main.h"
 #include "pros/colors.h"
 #include "routes/routes.h"
+#include "navigation/odometry.h"
+#include "controllers/ramsete_controller.h"
+#include "controllers/drivetrain_controller.h"
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -14,17 +17,19 @@
 pros::Controller master(pros::E_CONTROLLER_MASTER);
 pros::MotorGroup left_mg({-13, -14, -15});    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
 pros::MotorGroup right_mg({16, 19, 18});  // Creates a motor group with forwards port 5 and reversed ports 4 & 6
-// pros::Motor intake(6);
 pros::MotorGroup intake({8, -10});
+
+pros::Imu imu_sensor(5);
+
 const int GOAL_CLAMP_PORT = 8;
 const int HANG_PORT = 7;
 pros::ADIDigitalOut mogo_mech (GOAL_CLAMP_PORT, LOW);
 pros::ADIDigitalOut hang_mech (HANG_PORT, LOW);
+
 bool clampState = LOW;
 float prev_heading;
 
 
-pros::Imu imu_sensor(5);
 
 pros::adi::Encoder side_encoder('A', 'B', false);  // Ports 'A' and 'B' for the shaft encoder
 // Program types
@@ -503,6 +508,168 @@ void PID_controller(){
     left_mg.move_velocity(0);
     right_mg.move_velocity(0);
     pros::delay(1000);
+}
+
+/**
+ * @brief Follow a 2D motion profile using RAMSETE and drivetrain controllers
+ * 
+ * @param route Vector of trajectory points {t, x, y, theta, v, w}
+ * @param odometry Odometry instance for position tracking
+ * @param ramsete RAMSETE controller for trajectory following
+ * @param drivetrain Drivetrain controller for motor control
+ * @param left_mg Left motor group
+ * @param right_mg Right motor group
+ * @param timeout Maximum time to spend following trajectory (ms)
+ * @return bool True if trajectory was completed successfully
+ */
+bool followTrajectory(const std::vector<std::vector<double>>& route,
+                     Odometry& odometry,
+                     RamseteController& ramsete,
+                     DrivetrainController& drivetrain,
+                     pros::MotorGroup& left_mg,
+                     pros::MotorGroup& right_mg,
+                     int timeout = 5000) {
+    
+    if (route.empty()) return false;
+    
+    const double START_TIME = pros::millis();
+    const double DT = 20;  // 20ms fixed timestep matching motion profile
+    const double track_width = 15.0; // inches, adjust based on your robot
+    size_t trajectory_index = 0;
+    
+    // Main control loop
+    while (trajectory_index < route.size()) {
+        const double current_time = pros::millis() - START_TIME;
+        
+        // Timeout check
+        if (current_time > timeout) {
+            return false;
+        }
+        
+        // Get current state from odometry
+        odometry.update();
+        Pose current_pose = odometry.getPose();
+        auto velocities = odometry.getFilteredVelocities();
+        
+        // Check if the current waypoint is a node instead of a trajectory point
+        while (trajectory_index < route.size() && route[trajectory_index].size() < 6) {
+            // Handle node
+            const auto& node = route[trajectory_index];
+            
+            // Move intake (value is either -1, 0, or 1)
+            intake.move(127*node[0]);
+
+            // Toggle clamp state
+            if (node[1]){
+                clampState = !clampState;
+                mogo_mech.set_value(clampState);
+            }
+
+            // Toggle reverse
+            // if (node[2] == 1){
+            //     reversed = !reversed;
+            // }
+
+            trajectory_index++;
+        }
+        if (trajectory_index >= route.size()) {
+            break;
+        }
+
+        // Get desired state from trajectory
+        const auto& waypoint = route[trajectory_index];
+        const double goal_x = waypoint[1];
+        const double goal_y = waypoint[2];
+        const double goal_theta = waypoint[3];
+        const double goal_v = waypoint[4];
+        const double goal_w = waypoint[5];
+        
+        // Calculate accelerations using next waypoint
+        double left_accel = 0.0;
+        double right_accel = 0.0;
+        if (trajectory_index + 1 < route.size()) {
+            const auto& next = route[trajectory_index + 1];
+            
+            // Calculate wheel velocities at current and next timestep
+            const double current_left = goal_v - (goal_w * track_width / 2.0);
+            const double current_right = goal_v + (goal_w * track_width / 2.0);
+            
+            const double next_v = next[4];
+            const double next_w = next[5];
+            const double next_left = next_v - (next_w * track_width / 2.0);
+            const double next_right = next_v + (next_w * track_width / 2.0);
+            
+            // Calculate acceleration over the fixed timestep
+            left_accel = (next_left - current_left) / (DT / 1000.0);  // Convert ms to seconds
+            right_accel = (next_right - current_right) / (DT / 1000.0);
+        }
+        
+        // Get RAMSETE controller output
+        auto ramsete_output = ramsete.calculate(
+            current_pose.x, current_pose.y, current_pose.theta,
+            goal_x, goal_y, goal_theta,
+            goal_v, goal_w
+        );
+        
+        // Convert RAMSETE output to wheel velocities
+        auto wheel_velocities = ramsete.calculate_wheel_velocities(
+            ramsete_output[0], // linear velocity
+            ramsete_output[1], // angular velocity
+            2.75,             // wheel diameter (inches)
+            48.0/36.0         // gear ratio
+        );
+        
+        // Calculate motor voltages using drivetrain controller
+        auto voltages = drivetrain.calculateVoltages(
+            wheel_velocities[0], // left velocity setpoint
+            wheel_velocities[1], // right velocity setpoint
+            velocities.first,    // current left velocity
+            velocities.second,   // current right velocity
+            left_accel,         // left acceleration
+            right_accel         // right acceleration
+        );
+        
+        // Apply voltages to motors
+        left_mg.move(voltages.left);
+        right_mg.move(voltages.right);
+        
+        // Check if we're at the final waypoint
+        if (trajectory_index == route.size() - 1) {
+            const double position_tolerance = 1.0;  // inches
+            const double heading_tolerance = 0.1;   // radians
+            
+            const double position_error = std::sqrt(
+                std::pow(current_pose.x - goal_x, 2) +
+                std::pow(current_pose.y - goal_y, 2)
+            );
+            const double heading_error = std::abs(current_pose.theta - goal_theta);
+            
+            if (position_error < position_tolerance && heading_error < heading_tolerance) {
+                // Stop motors
+                left_mg.move(0);
+                right_mg.move(0);
+                return true;
+            }
+        }
+        
+        // Increment trajectory index based on fixed timestep
+        if (current_time >= (trajectory_index + 1) * DT) {
+            trajectory_index++;
+        }
+        
+        // Wait until next timestep
+        const double elapsed = pros::millis() - START_TIME;
+        const double next_timestep = (trajectory_index + 1) * DT;
+        const double delay_time = next_timestep - elapsed;
+        if (delay_time > 0) {
+            pros::delay(delay_time);
+        }
+    }
+    
+    // Stop motors
+    left_mg.move(0);
+    right_mg.move(0);
+    return true;
 }
 
 // Structure to store velocity, acceleration, and jerk

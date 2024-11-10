@@ -2,6 +2,7 @@
 #define ODOMETRY_H
 
 #include "api.h"
+#include "pros/adi.hpp"
 #include "kalman_2d.h"
 #include "heading_filter.h"
 #include "exponential_filter.h"
@@ -54,7 +55,7 @@ private:
     // Hardware references
     pros::MotorGroup& leftDrive;
     pros::MotorGroup& rightDrive;
-    pros::Encoder& lateralEncoder;
+    pros::Rotation& lateralEncoder;
     pros::Imu& imu;
     
     // Filters
@@ -121,7 +122,7 @@ public:
      * @param enable_position_filter Enable position filter
      */
     Odometry(pros::MotorGroup& left, pros::MotorGroup& right,
-             pros::Encoder& lateral, pros::Imu& imuSensor,
+             pros::Rotation& lateral, pros::Imu& imuSensor,
              double chassis_track_width, double lateral_wheel_offset,
              bool enable_heading_filter = false,
              bool enable_velocity_filters = false,
@@ -153,7 +154,7 @@ public:
     double getHeadingUncertainty() const;
     std::pair<double, double> getWheelOffsets() const;
     void setWheelOffsets(double new_track_width, double new_lateral_offset);
-    DebugInfo getDebugInfo() const;
+    DebugInfo getDebugInfo();
     
     /**
      * @brief Check if odometry readings are reliable

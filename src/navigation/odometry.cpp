@@ -16,7 +16,7 @@ Velocity::Velocity(double linear, double angular)
 
 // Odometry implementation
 Odometry::Odometry(pros::MotorGroup& left, pros::MotorGroup& right,
-                   pros::Encoder& lateral, pros::Imu& imuSensor,
+                   pros::Rotation& lateral, pros::Imu& imuSensor,
                    double chassis_track_width, double lateral_wheel_offset,
                    bool enable_heading_filter,
                    bool enable_velocity_filters,
@@ -147,7 +147,7 @@ void Odometry::update() {
     // Get and validate encoder readings
     std::vector<double> leftPositions = getMotorPositionsInches(leftDrive.get_position_all());
     std::vector<double> rightPositions = getMotorPositionsInches(rightDrive.get_position_all());
-    double lateralPos = ticksToInches(lateralEncoder.get_value());
+    double lateralPos = ticksToInches(lateralEncoder.get_position());
     
     double currentLeftPos = validateAndFilterEncoders(leftPositions, prevLeftPos, deltaTime);
     double currentRightPos = validateAndFilterEncoders(rightPositions, prevRightPos, deltaTime);
@@ -268,6 +268,8 @@ std::pair<double, double> Odometry::getFilteredVelocities() const {
 }
 
 std::pair<double, double> Odometry::getPositionUncertainty() const {
+    // Assuming P is a 2x2 matrix representing the covariance matrix
+    std::vector<std::vector<double>> P = positionFilter.getCovarianceMatrix();
     return {std::sqrt(P[0][0]), std::sqrt(P[1][1])};
 }
 
@@ -296,7 +298,7 @@ void Odometry::disableSensor(const std::string& sensor) {
         rightVelocityFilter.reset();
     } else if (sensor == "lateral") {
         // Reset lateral tracking
-        prevLateralPos = lateralEncoder.get_value();
+        prevLateralPos = lateralEncoder.get_position();
     }
 }
 
@@ -315,7 +317,7 @@ void Odometry::setWheelOffsets(double new_track_width, double new_lateral_offset
     odom_wheel_offset = new_lateral_offset;
 }
 
-Odometry::DebugInfo Odometry::getDebugInfo() const {
+Odometry::DebugInfo Odometry::getDebugInfo() {
     return {
         leftVelocity.linear,
         rightVelocity.linear,

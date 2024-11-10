@@ -53,6 +53,13 @@ public:
      * @return std::vector<double> State vector [x, y, vx, vy]
      */
     std::vector<double> getState() const;
+
+    /**
+     * @brief Get the current state covariance matrix
+     * 
+     * @return std::vector<std::vector<double>> Covariance matrix
+     */
+    std::vector<std::vector<double>> getCovarianceMatrix() const;
 };
 
 #endif // KALMAN_2D_H
