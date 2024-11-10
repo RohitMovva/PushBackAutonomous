@@ -1,1 +1,0 @@
-/usr/bin/c++ CMakeFiles/odometry_test.dir/test_odometry.cpp.o CMakeFiles/odometry_test.dir/src/odometry.cpp.o -o odometry_test  -lpthread /usr/lib64/libgtest_main.so.1.11.0 /usr/lib64/libgtest.so.1.11.0 
