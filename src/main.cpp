@@ -12,7 +12,7 @@
 
 // Robot config
 pros::Controller master(pros::E_CONTROLLER_MASTER);
-pros::MotorGroup left_mg({-13, -14, -15});    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
+pros::MotorGroup left_mg({-13, -2, -15});    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
 pros::MotorGroup right_mg({16, 19, 18});  // Creates a motor group with forwards port 5 and reversed ports 4 & 6
 // pros::Motor intake(6);
 pros::MotorGroup intake({8, -10});
@@ -36,6 +36,7 @@ std::string program_type = "autonomous";
 
 // Routes
 std::vector<std::vector<float>> route = auton_skills;
+// std::vector<std::vector<float>> route = solo_awp;
 // std::vector<std::vector<float>> route = mirrored_solo_awp;
 // std::vector<std::vector<float>> route = mogo_rush;
 // std::vector<std::vector<float>> route = mirrored_mogo_side;
@@ -343,15 +344,15 @@ void PID_controller(){
     double goal_x = 0.0;
     double goal_y = 0.0;
 	initial_heading = route[1][2];
-    if (route[0][2] == 1){
-        initial_heading += 180;
-        // initial_heading = 180 - initial_heading;
-        if (initial_heading > 180){
-            initial_heading -= 360;
-        } else if (initial_heading < -180){
-            initial_heading += 360;
-        }
-    }
+    // if (route[0][2] == 1){
+    //     initial_heading += 180;
+    //     // initial_heading = 180 - initial_heading;
+    //     if (initial_heading > 180){
+    //         initial_heading -= 360;
+    //     } else if (initial_heading < -180){
+    //         initial_heading += 360;
+    //     }
+    // }
     float old_heading = initial_heading;
     // pros::lcd::print(0, "Route size: %i", route.size());
     Position current_position;
@@ -370,6 +371,7 @@ void PID_controller(){
     bool mogo_mech_state = LOW;
     int kill_timer = -1;
     bool special_help_reverse = false;
+    int overshot_timer = 0;
     while (index < route.size()) { //  || x_pid.previous_error > 0.05 || y_pid.previous_error > 0.05 || heading_pid.previous_error > 2
         // if (kill_timer == 0) break;
         if (index == 0){
@@ -390,10 +392,11 @@ void PID_controller(){
             if (route[index][3] != 0){
                 double turn_val = double(route[index][3]);
                 turn_val *= -1;
-                if (reversed){
-                    turn_val *= -1;
-                }
-                turn_on_point(double(turn_val));
+                // REMINDER uncomment this block if we switch back over the path planner
+                // if (reversed){
+                //     turn_val *= -1;
+                // }
+                // turn_on_point(double(turn_val));
             }
             
             intake.move(127*route[index][0]); // Move here
@@ -407,7 +410,7 @@ void PID_controller(){
                 left_mg.move_velocity(0);
                 right_mg.move_velocity(0);
             }
-            pros::delay(route[index][4]*1000); // Wait for time
+            pros::delay(route[index][4]*1000*0); // Wait for time
 
             // Clamp goal here
             if (route[index][1]){
@@ -430,6 +433,14 @@ void PID_controller(){
         goal_x = route[index][0] / 12.0;
         goal_y = route[index][1] / 12.0;
         float setpoint_heading = route[index][2];
+        if (reversed){
+            setpoint_heading += 180;
+            if (setpoint_heading > 180){
+                setpoint_heading -= 360;
+            } else if (setpoint_heading < -180){
+                setpoint_heading += 360;
+            }
+        }
         if (dumb){
             goal_x *= -1;
             setpoint_heading = 180 - setpoint_heading;
@@ -458,27 +469,71 @@ void PID_controller(){
         if (current_position.heading > 0 && current_position.heading < 90
         ){
             if (current_position.x - goal_x > 0){
+                overshot_timer++;
                 x_control_signal *= 0.5;
+                if (overshot_timer > 1){
+                    x_control_signal = 0;
+                }
             } if (current_position.y - goal_y > 0){
+                overshot_timer++;
                 y_control_signal *= 0.5;
+                if (overshot_timer > 1){
+                    y_control_signal = 0;
+                }
+            }
+            if (!(current_position.x - goal_x > 0) && !(current_position.y - goal_y > 0)){
+                overshot_timer = 0;
             }
         } if (current_position.heading < 180 && current_position.heading > 90){
             if (current_position.x - goal_x < 0){
+                overshot_timer++;
                 x_control_signal *= 0.5;
+                if (overshot_timer > 1){
+                    x_control_signal = 0;
+                }
             } if (current_position.y - goal_y > 0){
+                overshot_timer++;
                 y_control_signal *= 0.5;
+                if (overshot_timer > 1){
+                    y_control_signal = 0;
+                }
+            }
+            if (!(current_position.x - goal_x < 0) && !(current_position.y - goal_y > 0)){
+                overshot_timer = 0;
             }
         } if (current_position.heading < -90 && current_position.heading > -180){
             if (current_position.x - goal_x < 0){
+                overshot_timer++;
                 x_control_signal *= 0.5;
+                if (overshot_timer > 1){
+                    x_control_signal = 0;
+                }
             } if (current_position.y - goal_y < 0){
+                overshot_timer++;
                 y_control_signal *= 0.5;
+                if (overshot_timer > 1){
+                    y_control_signal = 0;
+                }
+            }
+            if (!(current_position.x - goal_x < 0) && !(current_position.y - goal_y < 0)){
+                overshot_timer = 0;
             }
         } if (current_position.heading < 0 && current_position.heading > -90){
             if (current_position.x - goal_x > 0){
+                overshot_timer++;
                 x_control_signal *= 0.5;
+                if (overshot_timer > 1){
+                    x_control_signal = 0;
+                }
             } if (current_position.y - goal_y < 0){
+                overshot_timer++;
                 y_control_signal *= 0.5;
+                if (overshot_timer > 1){
+                    y_control_signal = 0;
+                }
+            }
+            if (!(current_position.x - goal_x > 0) && !(current_position.y - goal_y < 0)){
+                overshot_timer = 0;
             }
         }
         float heading_control_signal = heading_pid.compute(setpoint_heading, current_position.heading, dt, true);
