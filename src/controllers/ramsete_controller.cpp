@@ -12,6 +12,17 @@ RamseteController::RamseteController(double b, double zeta)
 {
 }
 
+RamseteController::RamseteController(double b, double zeta, double max_v, double max_w, double scale_factor)
+    : b_(b)
+    , zeta_(zeta)
+    , max_v_(max_v)
+    , max_w_(max_w)
+    , scale_factor_(scale_factor)
+{
+}
+
+
+
 std::vector<double> RamseteController::calculate_global_error(double x, double y, double theta,
                                                             double goal_x, double goal_y, double goal_theta) {
     std::vector<double> error;
@@ -82,6 +93,14 @@ std::vector<double> RamseteController::calculate_wheel_velocities(double linear_
 std::vector<double> RamseteController::calculate(double x, double y, double theta,
                                                double goal_x, double goal_y, double goal_theta,
                                                double v_ref, double w_ref) {
+
+    // Convert positions from user units to meters
+    // x *= scale_factor_;
+    // y *= scale_factor_;
+    // goal_x *= scale_factor_;
+    // goal_y *= scale_factor_;
+    // v_ref *= scale_factor_;  // Convert velocity reference to meters/sec
+
     // Calculate errors in global frame
     std::vector<double> global_error = calculate_global_error(x, y, theta, goal_x, goal_y, goal_theta);
     
@@ -131,12 +150,10 @@ std::vector<double> RamseteController::calculate(double x, double y, double thet
     v *= distance_factor;
     
     // Apply velocity limits with smooth saturation
-    const double max_v = 1.0;
-    const double max_w = 1.0;
+    v = max_v_ * std::tanh(v / max_v_);
+    w = max_w_ * std::tanh(w / max_w_);
     
-    v = max_v * std::tanh(v / max_v);
-    w = max_w * std::tanh(w / max_w);
-    
+    // UNCOMMENT IF NEEDED
     // Special case: if very close to goal but orientation is off, prioritize rotation
     if (distance_to_goal < 0.1 && std::abs(e_theta) > 0.1) {
         v *= 0.1;  // Reduce forward velocity to focus on rotation
@@ -144,7 +161,7 @@ std::vector<double> RamseteController::calculate(double x, double y, double thet
     }
     
     std::vector<double> output;
-    output.push_back(v);
+    output.push_back(v);  // Convert back to custom units
     output.push_back(w);
     
     return output;

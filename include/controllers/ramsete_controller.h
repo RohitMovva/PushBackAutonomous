@@ -14,10 +14,8 @@
 class RamseteController {
 private:
     void apply_velocity_limits(double& v, double& w) {
-        const double max_v = 2.0;
-        const double max_w = 2.0;
-        v = std::max(-max_v, std::min(v, max_v));
-        w = std::max(-max_w, std::min(w, max_w));
+        v = std::max(-max_v_, std::min(v, max_v_));
+        w = std::max(-max_w_, std::min(w, max_w_));
     }
 
     double normalizeAngle(double angle) {
@@ -33,12 +31,23 @@ public:
     RamseteController();
 
     /**
-     * @brief Construct a new RAMSETE Controller with custom parameters
+     * @brief Construct a new RAMSETE Controller with custom tuning parameters
      * 
      * @param b Tuning parameter for convergence (default: 2.0)
      * @param zeta Damping factor (default: 0.7)
      */
     RamseteController(double b, double zeta);
+
+    /**
+     * @brief Construct a new RAMSETE Controller with all custom parameters
+     * 
+     * @param b Tuning parameter for convergence (default: 2.0)
+     * @param zeta Damping factor (default: 0.7)
+     * @param max_v Maximum linear velocity (default: 2.0)
+     * @param max_w Maximum angular velocity (default: 2.0)
+     * @param scale_factor Scale factor for inputs and outputs (in relation to meters) (default: 1.0)
+     */
+    RamseteController(double b, double zeta, double max_v, double max_w, double scale_factor);
 
     /**
      * @brief Calculate the global error between current and goal states
@@ -110,6 +119,9 @@ public:
 private:
     double b_;      ///< Convergence tuning parameter
     double zeta_;   ///< Damping factor
+    double max_v_;  ///< Maximum linear velocity
+    double max_w_;  ///< Maximum angular velocity
+    double scale_factor_;  ///< Scale factor for inputs and outputs
 };
 
 #endif // RAMSETE_CONTROLLER_H

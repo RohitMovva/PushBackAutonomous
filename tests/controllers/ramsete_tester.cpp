@@ -16,7 +16,7 @@ protected:
     
     void SetUp() override {
         // Using default parameters (b = 2.0, zeta = 0.7)
-        controller = RamseteController();
+        controller = RamseteController(2.0, 0.7, 2.0, 2.0, 1.0);
     }
 };
 
@@ -180,7 +180,7 @@ protected:
     const double kEpsilon = 1e-6;
     
     void SetUp() override {
-        controller = RamseteController(1.0, 0.8);
+        controller = RamseteController(1.0, 0.8, 1.0, 1.0, 1.0);
     }
     
     // Helper function to normalize angle to [-π, π]
@@ -316,8 +316,8 @@ TEST_F(RamseteControllerExtendedTest, InputPerturbationTests) {
         );
         
         // Verify outputs remain bounded
-        EXPECT_LE(std::abs(control[0]), 2.0) << "Linear velocity exceeded limits with noise";
-        EXPECT_LE(std::abs(control[1]), 2.0) << "Angular velocity exceeded limits with noise";
+        EXPECT_LE(std::abs(control[0]), 1.0) << "Linear velocity exceeded limits with noise";
+        EXPECT_LE(std::abs(control[1]), 1.0) << "Angular velocity exceeded limits with noise";
     }
 }
 
