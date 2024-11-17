@@ -3,6 +3,8 @@
 
 #include <vector>
 #include <cmath>
+#include <algorithm>
+#include <iostream>
 
 /**
  * @brief RAMSETE Controller for trajectory tracking
@@ -23,6 +25,10 @@ private:
         while (angle < -M_PI) angle += 2 * M_PI;
         return angle;
     }
+
+    double prev_x;
+    double prev_y;
+    double prev_time;
 public:
     /**
      * @brief Construct a new RAMSETE Controller with default parameters
@@ -115,6 +121,28 @@ public:
     std::vector<double> calculate(double x, double y, double theta,
                                 double goal_x, double goal_y, double goal_theta,
                                 double v, double w);
+    /**
+     * @brief Helper function to calculate the sinc function
+     * @param x Input value
+     */
+    double sinc(double x) {
+        if (std::abs(x) < 1e-6) {
+            return 1.0 - x * x / 6.0;
+        } else {
+            return std::sin(x) / x;
+        }
+    }
+
+    /** 
+     * @brief Helper function to normalize angle
+     * @param angle Input angle in radians
+     * @return double Normalized angle in range [-pi, pi]
+     */
+    double normalize_angle(double angle) {
+        while (angle > M_PI) angle -= 2 * M_PI;
+        while (angle < -M_PI) angle += 2 * M_PI;
+        return angle;
+    }
 
 private:
     double b_;      ///< Convergence tuning parameter

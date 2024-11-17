@@ -15,7 +15,7 @@ RamseteController::RamseteController(double b, double zeta)
 RamseteController::RamseteController(double b, double zeta, double max_v, double max_w, double scale_factor)
     : b_(b)
     , zeta_(zeta)
-    , max_v_(max_v)
+    , max_v_(max_v * scale_factor)
     , max_w_(max_w)
     , scale_factor_(scale_factor)
 {
@@ -89,80 +89,232 @@ std::vector<double> RamseteController::calculate_wheel_velocities(double linear_
     
     return wheel_velocities;
 }
-
 std::vector<double> RamseteController::calculate(double x, double y, double theta,
                                                double goal_x, double goal_y, double goal_theta,
                                                double v_ref, double w_ref) {
+    static double true_prev_x = x * scale_factor_;
+    static double true_prev_y = y * scale_factor_;
+    static double true_prev_time = 0.0;
+    const double dt = 0.02;
 
     // Convert positions from user units to meters
-    // x *= scale_factor_;
-    // y *= scale_factor_;
-    // goal_x *= scale_factor_;
-    // goal_y *= scale_factor_;
-    // v_ref *= scale_factor_;  // Convert velocity reference to meters/sec
+    x *= scale_factor_;
+    y *= scale_factor_;
+    goal_x *= scale_factor_;
+    goal_y *= scale_factor_;
+    v_ref *= scale_factor_;
 
-    // Calculate errors in global frame
-    std::vector<double> global_error = calculate_global_error(x, y, theta, goal_x, goal_y, goal_theta);
+    // Calculate actual velocity using scaled positions
+    double dx = (x - true_prev_x) / dt;
+    double dy = (y - true_prev_y) / dt;
+    double actual_velocity = std::sqrt(dx*dx + dy*dy);
+
+    // Add velocity scaling factor to match reference frame
+    actual_velocity /= scale_factor_;
+    dx /= scale_factor_;
+    dy /= scale_factor_;
+
+    // Calculate errors in global frame with proper scaling
+    std::vector<double> global_error = calculate_global_error(x/scale_factor_, y/scale_factor_, 
+                                                            theta, goal_x/scale_factor_, 
+                                                            goal_y/scale_factor_, goal_theta);
     
-    // Transform errors to robot frame using explicit rotation matrix
-    double e_x = std::cos(theta) * global_error[0] + std::sin(theta) * global_error[1];
-    double e_y = -std::sin(theta) * global_error[0] + std::cos(theta) * global_error[1];
+    // Transform errors to robot frame (errors are now in user units)
+    double cos_theta = std::cos(theta);
+    double sin_theta = std::sin(theta);
+    double e_x = cos_theta * global_error[0] + sin_theta * global_error[1];
+    double e_y = -sin_theta * global_error[0] + cos_theta * global_error[1];
     double e_theta = global_error[2];
+
+    double distance_error = std::sqrt(e_x * e_x + e_y * e_y);
     
-    // Calculate distance to goal and heading to goal
-    double distance_to_goal = std::sqrt(global_error[0] * global_error[0] + global_error[1] * global_error[1]);
-    double heading_to_goal = std::atan2(global_error[1], global_error[0]);
-    
-    // Calculate heading error (difference between current heading and heading to goal)
-    double heading_error = heading_to_goal - theta;
-    while (heading_error > M_PI) heading_error -= 2 * M_PI;
-    while (heading_error < -M_PI) heading_error += 2 * M_PI;
-    
-    // Calculate control gains
-    double k = 2.0 * zeta_ * std::sqrt(w_ref * w_ref + b_ * v_ref * v_ref);
-    
-    // Initialize control outputs
-    double v = v_ref;
-    double w = w_ref;
-    
-    // Adjust velocity based on heading error
-    double heading_factor = std::cos(heading_error);
-    v *= std::max(0.1, heading_factor);
-    
-    // Calculate control inputs using standard RAMSETE formulation
-    v += k * e_x;
-    
-    // Special handling for angular velocity depending on distance to goal
-    if (distance_to_goal > 0.5) {
-        // When far from goal, prioritize heading correction
-        w = b_ * v_ref * std::sin(heading_error) / heading_error * e_y + k * heading_error;
-    } else {
-        // When close to goal, focus on final orientation
-        double orientation_error = goal_theta - theta;
-        while (orientation_error > M_PI) orientation_error -= 2 * M_PI;
-        while (orientation_error < -M_PI) orientation_error += 2 * M_PI;
+    static double prev_v_ref = v_ref;
+    static double prev_v = 0.0;
+    static double prev_w = 0.0;
+    static double prev_distance_error = distance_error;
+    static double error_integral = 0.0;
+
+    // Calculate if we're falling behind
+    double error_direction = std::atan2(global_error[1], global_error[0]);
+    double velocity_in_error_direction = dx * std::cos(error_direction) + 
+                                       dy * std::sin(error_direction);
+    bool falling_behind = velocity_in_error_direction < v_ref && distance_error > 0.1;
+
+    // Debug output
+    if (true_prev_time >= 0.74 && true_prev_time <= 0.78) {
+        double commanded_v = prev_v * scale_factor_;
+        double commanded_dx = commanded_v * std::cos(theta);
+        double commanded_dy = commanded_v * std::sin(theta);
         
-        w = k * orientation_error;
+        std::cout << "\nDebug output for time: " << true_prev_time << "s"
+                  << "\nPosition: (" << x/scale_factor_ << ", " << y/scale_factor_ << ")"
+                  << "\nTarget: (" << goal_x/scale_factor_ << ", " << goal_y/scale_factor_ << ")"
+                  << "\nActual velocity components: dx=" << dx << ", dy=" << dy 
+                  << "\nActual velocity magnitude: " << actual_velocity 
+                  << "\nCommanded velocity: " << commanded_v
+                  << "\nCommanded components: dx=" << commanded_dx << ", dy=" << commanded_dy
+                  << "\nReference velocity: " << v_ref
+                  << "\nRobot heading: " << theta
+                  << "\nPosition change: dx=" << (x - true_prev_x) << ", dy=" << (y - true_prev_y)
+                  << "\nError in global frame: " << global_error[0] << ", " << global_error[1]
+                  << "\nError in robot frame: ex=" << e_x << ", ey=" << e_y
+                  << "\nPrevious v,w: " << prev_v << ", " << prev_w 
+                  << "\nFalling behind: " << falling_behind << "\n";
     }
     
-    // Apply progressive velocity reduction as we approach the goal
-    double distance_factor = std::min(1.0, distance_to_goal / 1.0);
-    v *= distance_factor;
-    
-    // Apply velocity limits with smooth saturation
-    v = max_v_ * std::tanh(v / max_v_);
-    w = max_w_ * std::tanh(w / max_w_);
-    
-    // UNCOMMENT IF NEEDED
-    // Special case: if very close to goal but orientation is off, prioritize rotation
-    if (distance_to_goal < 0.1 && std::abs(e_theta) > 0.1) {
-        v *= 0.1;  // Reduce forward velocity to focus on rotation
-        w = k * e_theta;  // Direct orientation correction
+    // Store true previous values for next iteration
+    true_prev_x = x;
+    true_prev_y = y;
+    true_prev_time += dt;
+
+    // State detection
+    double v_ref_rate = (v_ref - prev_v_ref) / dt;
+    bool is_low_speed = v_ref < 0.5 * scale_factor_;
+    bool is_starting = prev_v < 0.1 * scale_factor_ && v_ref > prev_v_ref;
+    bool is_decelerating = v_ref_rate < -0.2 * scale_factor_;
+    bool is_high_speed = v_ref > 2.0 * scale_factor_;
+
+    // Error tracking
+    double error_rate = (distance_error - prev_distance_error) / dt;
+    static double filtered_error_rate = error_rate;
+    double error_filter = is_low_speed ? 0.8 : 0.6;
+    filtered_error_rate = error_filter * filtered_error_rate + (1 - error_filter) * error_rate;
+    bool error_growing = filtered_error_rate > 0.005;
+
+    // Update error integral with anti-windup
+    const double max_integral = falling_behind ? 1.0 : 0.5;
+    if (!is_low_speed && !is_starting) {
+        error_integral = std::clamp(error_integral + e_x * dt, -max_integral, max_integral);
+    } else {
+        error_integral = 0.0;
     }
+
+    // Adaptive gains
+    double k_base = 2.0 * zeta_ * std::sqrt(w_ref * w_ref + b_ * v_ref * v_ref);
+    double k = k_base;
+    
+    if (falling_behind) {
+        k *= 1.5;
+        if (distance_error > 0.2) {
+            k *= 1.0 + std::min(1.0, (distance_error - 0.2) * 2.0);
+        }
+    } else {
+        if (is_low_speed) {
+            k *= 1.1;
+            if (is_starting) {
+                k *= 0.8;
+            }
+        } else if (is_high_speed) {
+            k *= 0.9;
+            if (error_growing) {
+                k *= 1.3;
+            }
+        }
+    }
+
+    if (is_decelerating && !falling_behind) {
+        double decel_factor = std::min(1.0, std::abs(v_ref_rate));
+        k *= (1.0 + 0.3 * decel_factor);
+    }
+
+    // Velocity calculation
+    double v = v_ref * std::cos(e_theta);
+    
+    // Position correction
+    double integral_gain = falling_behind ? 0.2 : 0.1;
+    double position_correction = k * (e_x + integral_gain * error_integral);
+    
+    // Speed scaling
+    double speed_scale = 1.0;
+    if (falling_behind) {
+        speed_scale = 1.0 + std::min(1.0, distance_error);
+    } else {
+        if (is_low_speed) {
+            speed_scale = std::min(1.0, v_ref/scale_factor_ + 0.2);
+        } else if (is_high_speed) {
+            speed_scale = 0.95;
+            if (error_growing) {
+                speed_scale = 1.1;
+            }
+        }
+    }
+    
+    position_correction *= speed_scale;
+    if (!is_low_speed) {
+        position_correction += (falling_behind ? 0.3 : 0.2) * filtered_error_rate;
+    }
+    
+    v += position_correction;
+
+    // Angular velocity calculation
+    double sin_e_theta_over_e_theta = (std::abs(e_theta) < 1e-6) ? 1.0 : std::sin(e_theta) / e_theta;
+    double w = w_ref + b_ * v_ref * sin_e_theta_over_e_theta * e_y + k * e_theta;
+
+    // Acceleration limits
+    double max_accel = scale_factor_ * (falling_behind ? 4.0 : (is_low_speed ? 2.0 : (is_high_speed ? 2.5 : 3.0)));
+    if (is_starting) {
+        max_accel *= 0.6;
+    }
+    
+    double base_decel = scale_factor_ * (falling_behind ? 1.5 : (is_low_speed ? 2.0 : 3.0));
+    double max_decel = base_decel;
+    
+    if (is_decelerating && !falling_behind) {
+        if (distance_error > 0.1) {
+            max_decel *= (1.0 + std::min(1.5, distance_error / 0.2));
+        }
+        if (v > v_ref * 1.1) {
+            max_decel *= 1.5;
+        }
+    }
+
+    // Acceleration limiting
+    double v_accel = (v - prev_v) / dt;
+    double target_accel = std::clamp(v_accel, -max_decel, max_accel);
+    
+    // Adaptive smoothing
+    double smooth_factor = falling_behind ? 0.95 : (is_low_speed ? 0.6 : (is_high_speed ? 0.8 : 0.9));
+    v = prev_v + (v_accel + smooth_factor * (target_accel - v_accel)) * dt;
+
+    // Angular acceleration limiting
+    double max_w_accel = scale_factor_ * (is_low_speed ? 1.5 : (is_high_speed ? 2.0 : 2.5));
+    double w_accel = (w - prev_w) / dt;
+    if (std::abs(w_accel) > max_w_accel) {
+        w = prev_w + std::copysign(max_w_accel * dt, w_accel);
+    }
+
+    // Velocity limiting
+    double v_limit = max_v_;
+    if (falling_behind) {
+        v_limit = std::min(max_v_, v_ref * (1.5 + std::min(1.0, distance_error)));
+    } else {
+        if (is_low_speed) {
+            v_limit = std::min(v_limit, v_ref * 1.2);
+        } else if (distance_error > 0.1) {
+            v_limit *= std::max(0.85, 1.0 / (1.0 + 0.3 * distance_error));
+        }
+    }
+    
+    if (is_starting || is_low_speed) {
+        v = std::max(0.0, std::min(v_limit, v));
+    } else {
+        v = std::clamp(v, -v_limit, v_limit);
+    }
+    
+    w = std::clamp(w, -max_w_, max_w_);
+    
+    // Store values for next iteration
+    prev_v = v;
+    prev_w = w;
+    prev_v_ref = v_ref;
+    prev_distance_error = distance_error;
+
+    // Convert linear velocity back to user units
+    v /= scale_factor_;
     
     std::vector<double> output;
-    output.push_back(v);  // Convert back to custom units
+    output.push_back(v);
     output.push_back(w);
-    
+
     return output;
 }
