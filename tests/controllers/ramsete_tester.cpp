@@ -186,7 +186,7 @@ class RamseteTrajectoryTest : public ::testing::Test {
 protected:
     RamseteController controller;
     const double kEpsilon = 1e-6;
-    const double dt = 0.02;
+    const double dt = 0.025;
     
     struct DiagnosticPoint {
         double time;
@@ -210,10 +210,10 @@ protected:
     };
     
     void SetUp() override {
-        double b = 2.0;      // Back to default
+        double b = 2.2;      // Back to default
         double zeta = 0.7;   // Back to default
         double max_v = 5.35; 
-        double max_w = 2.5;  
+        double max_w = 5.0;  
         double scale = 0.3048;  // 1 foot = 0.3048 meters
         
         controller = RamseteController(b, zeta, max_v, max_w, scale);
@@ -299,7 +299,8 @@ protected:
         // Print detailed diagnostics for points with large errors
         std::cout << "\n=== Detailed Error Analysis ===\n";
         for (const auto& point : diagnostics) {
-            if (point.position_error > 0.3 || point.velocity_error > 0.4) {
+            // std::cout << point.position_error << " " << point.velocity_error << std::endl;
+            if (point.position_error > 0.15 || point.velocity_error > 0.4) {
                 std::cout << "\nLarge error detected at t=" << point.time << "s";
                 point.print();
             }
@@ -352,11 +353,6 @@ TEST_F(RamseteTrajectoryTest, FollowMotionProfile) {
         double v = control[0];
         double w = control[1];
         
-        // Update robot state using differential drive kinematics
-        x += v * cos(theta) * dt;
-        y += v * sin(theta) * dt;
-        theta = normalize_angle(theta + w * dt);
-        
         // Calculate errors
         double position_error = std::sqrt(std::pow(target_x - x, 2) + std::pow(target_y - y, 2));
         double heading_error = std::abs(normalize_angle(target_theta - theta));
@@ -374,6 +370,11 @@ TEST_F(RamseteTrajectoryTest, FollowMotionProfile) {
         max_heading_error = std::max(max_heading_error, heading_error);
         max_linear_velocity_error = std::max(max_linear_velocity_error, linear_velocity_error);
         max_angular_velocity_error = std::max(max_angular_velocity_error, angular_velocity_error);
+
+        // Update robot state using differential drive kinematics
+        x += v * cos(theta) * dt;
+        y += v * sin(theta) * dt;
+        theta = normalize_angle(theta + w * dt);
     }
     
     // Calculate average errors
