@@ -594,7 +594,7 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
     if (route.empty()) return false;
     
     const double START_TIME = pros::millis();
-    const double DT = 20;  // 20ms fixed timestep matching motion profile
+    const double DT = 25;  // 25ms fixed timestep matching motion profile
     const double track_width = 15.0; // inches, adjust based on your robot
     size_t trajectory_index = 0;
     

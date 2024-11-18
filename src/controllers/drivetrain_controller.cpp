@@ -33,7 +33,7 @@ DrivetrainController::MotorVoltages DrivetrainController::calculateVoltages(
     // Get current time and calculate delta
     uint32_t currentTime = pros::millis();
     double dt = (currentTime - prevTime) / 1000.0;
-    if (dt <= 0) dt = 0.02;  // Default to 20ms
+    if (dt <= 0) dt = 0.025;  // Default to 25ms
     
     // Convert velocities to encoder ticks/sec for consistency
     double leftSetpointTicks = velocityToTicks(leftVelocitySetpoint);

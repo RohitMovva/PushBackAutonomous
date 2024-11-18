@@ -3,6 +3,8 @@
 
 #include <vector>
 #include <cmath>
+#include <algorithm>
+#include <iostream>
 
 /**
  * @brief RAMSETE Controller for trajectory tracking
@@ -14,10 +16,8 @@
 class RamseteController {
 private:
     void apply_velocity_limits(double& v, double& w) {
-        const double max_v = 2.0;
-        const double max_w = 2.0;
-        v = std::max(-max_v, std::min(v, max_v));
-        w = std::max(-max_w, std::min(w, max_w));
+        v = std::max(-max_v_, std::min(v, max_v_));
+        w = std::max(-max_w_, std::min(w, max_w_));
     }
 
     double normalizeAngle(double angle) {
@@ -25,6 +25,10 @@ private:
         while (angle < -M_PI) angle += 2 * M_PI;
         return angle;
     }
+
+    double prev_x;
+    double prev_y;
+    double prev_time;
 public:
     /**
      * @brief Construct a new RAMSETE Controller with default parameters
@@ -33,12 +37,23 @@ public:
     RamseteController();
 
     /**
-     * @brief Construct a new RAMSETE Controller with custom parameters
+     * @brief Construct a new RAMSETE Controller with custom tuning parameters
      * 
      * @param b Tuning parameter for convergence (default: 2.0)
      * @param zeta Damping factor (default: 0.7)
      */
     RamseteController(double b, double zeta);
+
+    /**
+     * @brief Construct a new RAMSETE Controller with all custom parameters
+     * 
+     * @param b Tuning parameter for convergence (default: 2.0)
+     * @param zeta Damping factor (default: 0.7)
+     * @param max_v Maximum linear velocity (default: 2.0)
+     * @param max_w Maximum angular velocity (default: 2.0)
+     * @param scale_factor Scale factor for inputs and outputs (in relation to meters) (default: 1.0)
+     */
+    RamseteController(double b, double zeta, double max_v, double max_w, double scale_factor);
 
     /**
      * @brief Calculate the global error between current and goal states
@@ -106,10 +121,35 @@ public:
     std::vector<double> calculate(double x, double y, double theta,
                                 double goal_x, double goal_y, double goal_theta,
                                 double v, double w);
+    /**
+     * @brief Helper function to calculate the sinc function
+     * @param x Input value
+     */
+    double sinc(double x) {
+        if (std::abs(x) < 1e-6) {
+            return 1.0 - x * x / 6.0;
+        } else {
+            return std::sin(x) / x;
+        }
+    }
+
+    /** 
+     * @brief Helper function to normalize angle
+     * @param angle Input angle in radians
+     * @return double Normalized angle in range [-pi, pi]
+     */
+    double normalize_angle(double angle) {
+        while (angle > M_PI) angle -= 2 * M_PI;
+        while (angle < -M_PI) angle += 2 * M_PI;
+        return angle;
+    }
 
 private:
     double b_;      ///< Convergence tuning parameter
     double zeta_;   ///< Damping factor
+    double max_v_;  ///< Maximum linear velocity
+    double max_w_;  ///< Maximum angular velocity
+    double scale_factor_;  ///< Scale factor for inputs and outputs
 };
 
 #endif // RAMSETE_CONTROLLER_H
