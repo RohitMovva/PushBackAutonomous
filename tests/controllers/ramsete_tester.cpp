@@ -312,7 +312,7 @@ protected:
 
 TEST_F(RamseteTrajectoryTest, FollowMotionProfile) {
     std::vector<std::vector<double>> route = test;
-    auto diagnostics = run_trajectory_with_diagnostics(route);
+    // auto diagnostics = run_trajectory_with_diagnostics(route);
 
     // Initialize robot state with the first waypoint
     double x = route[1][1];      // Start x
@@ -348,7 +348,7 @@ TEST_F(RamseteTrajectoryTest, FollowMotionProfile) {
             target_x, target_y, target_theta,
             target_v, target_w
         );
-        
+        std::cout << "Outputs: " << control[0] << " " << control[1] << std::endl;
         // Extract control velocities
         double v = control[0];
         double w = control[1];

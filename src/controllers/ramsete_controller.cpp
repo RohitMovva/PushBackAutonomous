@@ -115,8 +115,11 @@ std::vector<double> RamseteController::calculate(double x, double y, double thet
     
     // Calculate gains with enhanced stability
     bool is_low_speed = std::abs(v_ref) < 0.5;
-    double k = 2.0 * zeta_ * std::sqrt(w_ref * w_ref + b_ * v_ref * v_ref) * 
-               (is_low_speed ? 1.3 : (distance_error < 0.1 ? 1.2 : 1.0));
+    double k = 2.0 * zeta_ * std::sqrt(w_ref * w_ref + b_ * std::abs(v_ref) * std::abs(v_ref)) * 
+            (is_low_speed ? 1.3 : (distance_error < 0.1 ? 1.2 : 1.0));
+
+    std::cout << "K: " << k << std::endl;
+    std::cout << "Distance Error: " << distance_error << std::endl;
     
     // Calculate velocities with safe handling of small angles
     double v = v_ref * std::cos(e_theta) + k * e_x;
@@ -124,13 +127,16 @@ std::vector<double> RamseteController::calculate(double x, double y, double thet
     
     if (std::abs(e_theta) < 1e-6) {
         w += b_ * v_ref * e_y + k * e_theta;
+        std::cout << "Vars: " << b_ << " " << v_ref << " " << e_y << " " << k << " " << e_theta << " " << w << std::endl;
     } else {
         w += b_ * v_ref * (std::sin(e_theta) / e_theta) * e_y + k * e_theta;
+        std::cout << "Vars: " << b_ << " " << v_ref << " " << e_y << " " << k << " " << e_theta << " " << w << std::endl;
     }
 
     // Apply velocity limits with low-speed consideration
     if (is_low_speed) {
-        v = std::max(0.0, std::min(v, v_ref * 1.1));  // Prevent overshoot at low speeds
+        double limit = std::abs(v_ref) * 1.1;
+        v = std::clamp(v, -limit, limit);
     } else {
         v = std::clamp(v, -max_v_, max_v_);
     }
