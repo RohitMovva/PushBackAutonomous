@@ -3,9 +3,9 @@
 
 #include "api.h"
 #include "pros/adi.hpp"
-#include "kalman_2d.h"
-#include "heading_filter.h"
-#include "exponential_filter.h"
+#include "filters/kalman_2d.h"
+#include "filters/heading_filter.h"
+#include "filters/exponential_filter.h"
 #include <cmath>
 #include <vector>
 #include <string>

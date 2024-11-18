@@ -22,11 +22,15 @@ pros::MotorGroup intake({8, -10});
 pros::Imu imu_sensor(5);
 
 const int GOAL_CLAMP_PORT = 8;
-const int HANG_PORT = 7;
+const int DOINKER_PORT = 7;
+const int COLOR_SORT_PORT = 6;
 pros::ADIDigitalOut mogo_mech (GOAL_CLAMP_PORT, LOW);
-pros::ADIDigitalOut hang_mech (HANG_PORT, LOW);
+pros::ADIDigitalOut doinker (DOINKER_PORT, LOW);
+pros::ADIDigitalOut color_sort (COLOR_SORT_PORT, LOW);
 
 bool clampState = LOW;
+bool doinkerState = LOW;
+bool color_sort_state = LOW;
 float prev_heading;
 
 
@@ -40,7 +44,7 @@ std::string program_type = "autonomous";
 // std::string program_type = "calibrate_metrics";
 
 // Routes
-std::vector<std::vector<float>> route = auton_skills;
+std::vector<std::vector<float>> route = solo_awp;                                                                                                                                                                                                                                                                                                                                                                                                                                                                   ;
 // std::vector<std::vector<float>> route = solo_awp;
 // std::vector<std::vector<float>> route = mirrored_solo_awp;
 // std::vector<std::vector<float>> route = mogo_rush;
@@ -389,33 +393,34 @@ void PID_controller(){
                 kill_timer = 10;
             }
             // Turn here
-            if (route[index][3] != 0){
-                double turn_val = double(route[index][3]);
-                turn_val *= -1;
-                // REMINDER uncomment this block if we switch back over the path planner
-                // if (reversed){
-                //     turn_val *= -1;
-                // }
-                // turn_on_point(double(turn_val));
-            }
+            // if (route[index][4] != 0){
+            //     double turn_val = double(route[index][3]);
+            //     turn_val *= -1;
+            // }
             
             intake.move(127*route[index][0]); // Move here
 
              // Toggle reverse
-            if (route[index][2] == 1){
+            if (route[index][3] == 1){
                 reversed = !reversed;
             }
 
-            if (route[index][4] != 0){ // Double check if we need this part
-                left_mg.move_velocity(0);
-                right_mg.move_velocity(0);
-            }
-            pros::delay(route[index][4]*1000*0); // Wait for time
+            // if (route[index][5] != 0){ // Double check if we need this part
+            //     left_mg.move_velocity(0);
+            //     right_mg.move_velocity(0);
+            // }
+            // pros::delay(route[index][4]*1000*0); // Wait for time
 
             // Clamp goal here
             if (route[index][1]){
                 mogo_mech_state = !mogo_mech_state;
                 mogo_mech.set_value(mogo_mech_state);
+            }
+
+            // Doink
+            if (route[index][2]){
+                doinkerState = !doinkerState;
+                doinker.set_value(doinkerState);
             }
 
             index++;
@@ -911,7 +916,9 @@ int joystickCurve(int x, double a=2.5){
  */
 void opcontrol() {
     bool fired = false;
+    bool doinker_fired = false;
     bool hang_deployed = false;
+    bool color_sort_fired = false;
 
     bool intake_forward = false;
     bool intake_reverse = false;
@@ -948,25 +955,32 @@ void opcontrol() {
                     master.clear_line(1);
                     master.clear_line(2);
                 }
-                mogo_mech.set_value(clampState);
                 clampState = !clampState;
-                
+                mogo_mech.set_value(clampState);
             }
             fired = true;
         } else {
             fired = false;
         }
-
-        if (clampState){
-            // pros::screen::set_pen(pros::Color::red);
-            
+        // color_sort_state
+        if (master.get_digital(DIGITAL_DOWN)){
+            if (!color_sort_fired){
+                color_sort_state = !color_sort_state;
+                color_sort.set_value(color_sort_state);
+            }
+            color_sort_fired = true;
         } else {
-            pros::screen::set_pen(pros::Color::green);
+            color_sort_fired = false;
         }
 
-        if (master.get_digital(DIGITAL_B) && !hang_deployed){
-            hang_mech.set_value(HIGH);
-            hang_deployed = true;
+        if (master.get_digital(DIGITAL_B)){
+            if (!doinker_fired){
+                doinkerState = !doinkerState;
+                doinker.set_value(doinkerState);
+            }
+            doinker_fired = true;
+        } else {
+            doinker_fired = false;
         }
         
 		pros::delay(20);                               // Run for 20 ms then update
