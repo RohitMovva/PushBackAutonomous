@@ -124,9 +124,9 @@ public:
     Odometry(pros::MotorGroup& left, pros::MotorGroup& right,
              pros::Rotation& lateral, pros::Imu& imuSensor,
              double chassis_track_width, double lateral_wheel_offset,
-             bool enable_heading_filter = false,
-             bool enable_velocity_filters = false,
-             bool enable_position_filter = false);
+             bool enable_heading_filter,
+             bool enable_velocity_filters,
+             bool enable_position_filter);
 
     /**
      * @brief Reset odometry to initial state
