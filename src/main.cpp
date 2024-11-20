@@ -1,15 +1,4 @@
 #include "main.h"
-#include "pros/colors.h"
-#include "routes/routes.h"
-#include "navigation/odometry.h"
-#include "controllers/ramsete_controller.h"
-#include "controllers/drivetrain_controller.h"
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <sstream>
-#include <vector>
-#include <algorithm>
 
 // Global Vars
 
@@ -24,9 +13,9 @@ pros::Imu imu_sensor(5);
 const int GOAL_CLAMP_PORT = 8;
 const int DOINKER_PORT = 7;
 const int COLOR_SORT_PORT = 6;
-pros::adi::DigitalOut mogo_mech (GOAL_CLAMP_PORT, LOW);
-pros::adi::DigitalOut doinker (DOINKER_PORT, LOW);
-pros::adi::DigitalOut color_sort (COLOR_SORT_PORT, LOW);
+EnhancedDigitalOut mogo_mech (GOAL_CLAMP_PORT, LOW);
+EnhancedDigitalOut doinker (DOINKER_PORT, LOW);
+EnhancedDigitalOut color_sort (COLOR_SORT_PORT, LOW);
 
 bool clamp_state = LOW;
 bool doinker_state = LOW;
@@ -214,17 +203,17 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
         }
         
         // Increment trajectory index based on fixed timestep
-        if (current_time >= (trajectory_index + 1) * DT) {
-            trajectory_index++;
-        }
+        // if (current_time >= (trajectory_index + 1) * DT) {
+        trajectory_index++;
+        // }
         
         // Wait until next timestep
-        const double elapsed = pros::millis() - START_TIME;
-        const double next_timestep = (trajectory_index + 1) * DT;
-        const double delay_time = next_timestep - elapsed;
-        if (delay_time > 0) {
-            pros::delay(delay_time);
-        }
+        // const double elapsed = pros::millis() - START_TIME;
+        // const double next_timestep = (trajectory_index + 1) * DT;
+        // const double delay_time = next_timestep - elapsed;
+        // if (delay_time > 0) {
+        pros::delay(DT);
+        // }
     }
     
     // Stop motors
@@ -330,13 +319,6 @@ int joystickCurve(int x, double a=2.5){
  * task, not resume it from where it left off.
  */
 void opcontrol() {
-    bool fired = false;
-    bool doinker_fired = false;
-    bool hang_deployed = false;
-    bool color_sort_fired = false;
-
-    bool intake_forward = false;
-    bool intake_reverse = false;
 	while (true) {
 		// Arcade control scheme
 		int dir = (master.get_analog(ANALOG_LEFT_Y));    // Gets amount forward/backward from left joystick
@@ -344,60 +326,23 @@ void opcontrol() {
 		left_mg.move(dir + turn);                      // Sets left motor voltage
 		right_mg.move(dir - turn);                     // Sets right motor voltage
 
-        if (master.get_digital(DIGITAL_R1)){
-            if (!intake_forward){
-                intake.move_velocity(200);
-            }
-            intake_forward = true;
+        if (master.get_digital(DIGITAL_R1)) {
+            intake.move_velocity(200);
+        } else if (master.get_digital(DIGITAL_R2)) {
+            intake.move_velocity(-200);
         } else {
-            intake_forward = false;
-        }
-
-        if (master.get_digital(DIGITAL_R2)){
-                intake.move_velocity(-200);
-        }
-
-        else if (!intake_forward){
             intake.move_velocity(0);
         }
 
-        if (master.get_digital(DIGITAL_L1)){
-            if (!fired){
-                if (clamp_state){
-                    master.rumble("-");
-                } else {
-                    master.clear_line(0);
-                    master.clear_line(1);
-                    master.clear_line(2);
-                }
-                clamp_state = !clamp_state;
-                mogo_mech.set_value(clamp_state);
-            }
-            fired = true;
-        } else {
-            fired = false;
-        }
-        // color_sort_state
-        if (master.get_digital(DIGITAL_DOWN)){
-            if (!color_sort_fired){
-                color_sort_state = !color_sort_state;
-                color_sort.set_value(color_sort_state);
-            }
-            color_sort_fired = true;
-        } else {
-            color_sort_fired = false;
+        mogo_mech.input_toggle(master.get_digital(DIGITAL_L1));
+        if (mogo_mech.get_state()){
+            master.rumble("-");
         }
 
-        if (master.get_digital(DIGITAL_B)){
-            if (!doinker_fired){
-                doinker_state = !doinker_state;
-                doinker.set_value(doinker_state);
-            }
-            doinker_fired = true;
-        } else {
-            doinker_fired = false;
-        }
-        
+        color_sort.input_toggle(master.get_digital(DIGITAL_DOWN));
+
+        doinker.input_toggle(master.get_digital(DIGITAL_B));
+
 		pros::delay(20);                               // Run for 20 ms then update
 	}
 }

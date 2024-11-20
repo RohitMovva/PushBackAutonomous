@@ -341,6 +341,7 @@ TEST_F(RamseteTrajectoryTest, FollowMotionProfile) {
         double target_theta = route[i][3];
         double target_v = route[i][4];
         double target_w = route[i][5];
+        // std::cout << "target w " << target_w << "\n";
         
         // Calculate control outputs
         std::vector<double> control = controller.calculate(
@@ -348,10 +349,15 @@ TEST_F(RamseteTrajectoryTest, FollowMotionProfile) {
             target_x, target_y, target_theta,
             target_v, target_w
         );
-        std::cout << "Outputs: " << control[0] << " " << control[1] << std::endl;
+
         // Extract control velocities
         double v = control[0];
         double w = control[1];
+
+        // Add biased noise to simulate real-world conditions
+        v += 0.01 * v; // Extremely realistic frfr
+        w += 0.01 * w;
+
         
         // Calculate errors
         double position_error = std::sqrt(std::pow(target_x - x, 2) + std::pow(target_y - y, 2));
