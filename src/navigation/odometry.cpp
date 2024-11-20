@@ -30,9 +30,9 @@ double angleDifference(double a, double b) {
 Odometry::Odometry(pros::MotorGroup& left, pros::MotorGroup& right,
                    pros::Rotation& lateral, pros::Imu& imuSensor,
                    double chassis_track_width, double lateral_wheel_offset,
-                   bool enable_heading_filter,
-                   bool enable_velocity_filters,
-                   bool enable_position_filter)
+                   bool enable_heading_filter=false,
+                   bool enable_velocity_filters=false,
+                   bool enable_position_filter=false)
     : WHEEL_DIAMETER(2.75)
     , WHEEL_CIRCUMFERENCE(WHEEL_DIAMETER * M_PI)
     , GEAR_RATIO(36.0 / 48.0)
