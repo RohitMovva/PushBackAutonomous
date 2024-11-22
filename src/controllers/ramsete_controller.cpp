@@ -1,4 +1,4 @@
-#include "../../include/controllers/ramsete_controller.h"
+#include "controllers/ramsete_controller.h"
 
 RamseteController::RamseteController()
     : b_(2.0)

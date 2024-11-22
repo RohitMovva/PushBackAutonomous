@@ -1,5 +1,5 @@
 // enhanced_digital_out.cpp
-#include "enhanced_digital_out.h"
+#include "hardware/enhanced_digital_out.h"
 
 EnhancedDigitalOut::EnhancedDigitalOut(std::uint8_t port, bool initial_state)
     : pros::adi::DigitalOut(port, initial_state), 

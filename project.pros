@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "r_mogo_rush",
+    "project_name": "ramsetetesting",
     "target": "v5",
     "templates": {
       "kernel": {
@@ -256,7 +256,7 @@
     },
     "upload_options": {
       "icon": "X",
-      "slot": 3
+      "slot": 1
     },
     "use_early_access": false
   }

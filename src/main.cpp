@@ -1,12 +1,13 @@
 #include "main.h"
+#include <cstring>
 
 // Global Vars
 
 // Robot config
 pros::Controller master(pros::E_CONTROLLER_MASTER);
-pros::MotorGroup left_mg({-13, -2, -15});    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
+pros::MotorGroup left_mg({-13, -6, -15});    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
 pros::MotorGroup right_mg({16, 19, 18});  // Creates a motor group with forwards port 5 and reversed ports 4 & 6
-pros::MotorGroup intake({8, -10});
+pros::MotorGroup intake({-1, 12});
 
 pros::Imu imu_sensor(5);
 
@@ -16,6 +17,7 @@ const int COLOR_SORT_PORT = 6;
 EnhancedDigitalOut mogo_mech (GOAL_CLAMP_PORT, LOW);
 EnhancedDigitalOut doinker (DOINKER_PORT, LOW);
 EnhancedDigitalOut color_sort (COLOR_SORT_PORT, LOW);
+pros::Vision vision_sensor(2);
 
 bool clamp_state = LOW;
 bool doinker_state = LOW;
@@ -24,7 +26,7 @@ float prev_heading;
 
 
 
-pros::Rotation side_encoder(4); // Lateral tracking encoder (PORT MIGHT BE WRONG)
+pros::Rotation side_encoder(6); // Lateral tracking encoder (PORT MIGHT BE WRONG)
 // Program types
 // std::string program_type = "driver";
 // std::string program_type = "autonomous";
@@ -33,7 +35,7 @@ std::string program_type = "autonomous";
 // std::string program_type = "calibrate_metrics";
 
 // Routes
-std::vector<std::vector<double>> route = test;
+std::vector<std::vector<double>> route = testy;
 // std::vector<std::vector<float>> route = {}; // Driver or Calibration
 
 // Robot parameters (needs to be tweaked later)
@@ -53,6 +55,125 @@ float ticks_to_feet(int ticks) {
 float ft_per_sec_to_rpm(float velocity_ft_per_sec) {
     float wheel_circumference_ft = (M_PI * WHEEL_DIAMETER) / 12.0;
     return (velocity_ft_per_sec * 60.0) / wheel_circumference_ft;
+}
+
+// Structure to hold color signature information
+struct ColorInfo {
+    int32_t red_sig;   // Signature ID for red objects
+    int32_t blue_sig;  // Signature ID for blue objects
+    pros::vision_signature_s_t* red_sig_ptr;
+    pros::vision_signature_s_t* blue_sig_ptr;
+};
+
+// Function to check color and control piston
+void color_piston_control(void* param) {
+    const char* target_color = (const char*)param;
+    
+    // Initialize devices
+    
+    // Initialize color signatures (you need to configure these using Vision Utility)
+    pros::vision_signature_s_t RED_SIG =
+        pros::Vision::signature_from_utility(1, 8000, 10000, 9000, -1000, 1000, 0, 3.000, 0);
+    pros::vision_signature_s_t BLUE_SIG =
+        pros::Vision::signature_from_utility(2, -3000, -1000, -2000, 3000, 5000, 4000, 3.000, 0);
+    
+    ColorInfo colors = {1, 2, &RED_SIG, &BLUE_SIG};
+    
+    while (true) {
+        // Determine which signature to look for
+        int32_t sig_id = (strcmp(target_color, "red") == 0) ? colors.red_sig : colors.blue_sig;
+        pros::vision_signature_s_t* sig_ptr = 
+            (strcmp(target_color, "red") == 0) ? colors.red_sig_ptr : colors.blue_sig_ptr;
+        
+        // Configure vision sensor with the appropriate signature
+        vision_sensor.set_signature(sig_id, sig_ptr);
+        
+        // Get the largest object of the specified color
+        pros::vision_object_s_t detected_obj = 
+            vision_sensor.get_by_sig(0, sig_id);
+        
+        // Check if object is detected and meets size threshold
+        if (detected_obj.signature == sig_id && detected_obj.width > 10) {
+            // Wait for 250ms to ensure stable detection
+            pros::delay(250);
+            
+            // Fire piston
+            color_sort_state = HIGH;
+            color_sort.set_value(color_sort_state);
+            
+            // Hold for 500ms
+            pros::delay(500);
+            
+            // Retract piston
+            color_sort_state = LOW;
+            color_sort.set_value(color_sort_state);
+        }
+        
+        // Add a small delay to prevent CPU hogging
+        pros::delay(20);
+    }
+}
+
+class ColorDetectionManager {
+private:
+    pros::Task* detection_task = nullptr;
+    const char* current_color = nullptr;
+
+public:
+    // Constructor
+    ColorDetectionManager() = default;
+    
+    // Start detection with specified color
+    void start(const char* color) {
+        // If task is already running, stop it
+        if (detection_task != nullptr) {
+            stop();
+        }
+        
+        // Allocate new color parameter
+        current_color = color;
+        
+        // Create new task
+        detection_task = new pros::Task(color_piston_control, 
+                                      (void*)current_color, 
+                                      "Color Detection");
+    }
+    
+    // Stop the detection task
+    void stop() {
+        if (detection_task != nullptr) {
+            detection_task->remove();
+            delete detection_task;
+            detection_task = nullptr;
+        }
+    }
+    
+    // Check if task is running
+    bool is_running() {
+        return detection_task != nullptr;
+    }
+    
+    // Destructor
+    ~ColorDetectionManager() {
+        stop();
+    }
+};
+
+
+// Function to start the color detection thread
+void start_color_detection(const char* color) {
+    // Validate color parameter
+    if (strcmp(color, "red") != 0 && strcmp(color, "blue") != 0) {
+        std::cout << "Invalid color parameter. Use 'red' or 'blue'" << std::endl;
+        return;
+    }
+    
+    // Allocate memory for the color parameter
+    char* color_param = (char*)malloc(strlen(color) + 1);
+    strcpy(color_param, color);
+    
+    // Create the thread
+    pros::Task color_detection_task(color_piston_control, (void*)color_param, "Color Detection");
 }
 
 /**
@@ -80,7 +201,9 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
     const double START_TIME = pros::millis();
     const double DT = 25;  // 25ms fixed timestep matching motion profile
     const double track_width = 15.0; // inches, adjust based on your robot
-    size_t trajectory_index = 0;
+    size_t trajectory_index = 1;
+    Pose new_pos = {route[1][1], route[1][2], route[1][3]};
+    odometry.setPose(new_pos);
     
     // Main control loop
     while (trajectory_index < route.size()) {
@@ -293,8 +416,8 @@ void competition_initialize() {
 void autonomous() {
 	if (program_type == "autonomous"){
         Odometry odometry(left_mg, right_mg, side_encoder, imu_sensor, WHEEL_BASE_WIDTH, 0.0, false, false, false);
-        RamseteController ramsete(2.0, 0.7, 1.0, 1.0, 1.0);
-        DrivetrainController drivetrain(5.0, 0.2, 0.05, 0.1, 0.001, 0.01);
+        RamseteController ramsete(2.0, 0.7, 5.35, 5.0, 0.3048);
+        DrivetrainController drivetrain(5.0, 0, 0, 0, 0, 0);
         followTrajectory(route, odometry, ramsete, drivetrain, left_mg, right_mg);
     }
 }
@@ -334,8 +457,9 @@ void opcontrol() {
             intake.move_velocity(0);
         }
 
+        bool old_state = mogo_mech.get_state();
         mogo_mech.input_toggle(master.get_digital(DIGITAL_L1));
-        if (mogo_mech.get_state()){
+        if (!old_state && mogo_mech.get_state()){
             master.rumble("-");
         }
 

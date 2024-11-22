@@ -10,7 +10,7 @@ def calculate_angle(p1, p2):
     dy = p2[1] - p1[1]
     return math.degrees(math.atan2(dy, dx))
 
-def animate_coordinates(coords1, coords2, robot_size=1.5, interval=20):
+def animate_coordinates(coords1, coords2, robot_size=1.5, interval=25):
     """
     Animate two lists of coordinates with a specified interval between points.
     Includes a rotating square robot representation following the second path.
