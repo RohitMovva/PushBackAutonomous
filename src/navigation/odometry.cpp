@@ -36,7 +36,7 @@ Odometry::Odometry(pros::MotorGroup& left, pros::MotorGroup& right,
     : WHEEL_DIAMETER(2.75)
     , WHEEL_CIRCUMFERENCE(WHEEL_DIAMETER * M_PI)
     , GEAR_RATIO(36.0 / 48.0)
-    , TICKS_PER_ROTATION(900.0)
+    , TICKS_PER_ROTATION(300.0)
     , MAX_VELOCITY_CHANGE(100.0)
     , MAX_ENCODER_DEVIATION(2.0)
     , track_width(chassis_track_width)
@@ -60,6 +60,12 @@ double Odometry::ticksToInches(double ticks) {
     return (ticks / TICKS_PER_ROTATION) * WHEEL_CIRCUMFERENCE * GEAR_RATIO;
 }
 
+double Odometry::latTicksToInches(int ticks) {
+    // Convert lateral encoder ticks to inches
+    return ((double(ticks) / 1000.0) / 360.0) * WHEEL_CIRCUMFERENCE;
+}
+
+
 double Odometry::degreesToRadians(double degrees) {
     return degrees * M_PI / 180.0;
 }
@@ -69,11 +75,11 @@ double Odometry::getAveragePosition(const std::vector<double>& positions) {
     return std::accumulate(positions.begin(), positions.end(), 0.0) / positions.size();
 }
 
-std::vector<double> Odometry::getMotorPositionsInches(const std::vector<double>& motorPositions) {
+std::vector<double> Odometry::getMotorPositionsInches(const std::vector<double>& motorPositions, double prevPos) {
     std::vector<double> positions;
     positions.reserve(motorPositions.size());
     for (double pos : motorPositions) {
-        positions.push_back(ticksToInches(pos));
+        positions.push_back(ticksToInches(pos) + prevPos);
     }
     return positions;
 }
@@ -119,8 +125,8 @@ void Odometry::reset() {
     rightVelocityFilter.reset();
     headingFilter.reset();
     
-    leftDrive.tare_position();
-    rightDrive.tare_position();
+    leftDrive.tare_position_all();
+    rightDrive.tare_position_all();
     lateralEncoder.reset();
     imu.tare_rotation();
 }
@@ -146,23 +152,26 @@ void Odometry::update() {
     double filteredHeading;
     if (useHeadingFilter) {
         headingFilter.predict(deltaTime);
-        double measured_heading = degreesToRadians(imu.get_rotation());
-        double measured_angular_velocity = degreesToRadians(imu.get_gyro_rate().z);
+        double measured_heading = degreesToRadians(imu.get_heading());
+        double measured_angular_velocity = degreesToRadians(imu.get_gyro_rate().x);
         headingFilter.update(measured_heading, measured_angular_velocity, true);
         filteredHeading = headingFilter.getHeading();
     } else {
-        filteredHeading = degreesToRadians(imu.get_rotation());
+        filteredHeading = degreesToRadians(imu.get_heading());
     }
     
-    double deltaTheta = angleDifference(filteredHeading, currentPose.theta);
+    // double deltaTheta = angleDifference(filteredHeading, currentPose.theta);
+    double deltaTheta = filteredHeading;
     
     // Get and validate encoder readings
-    std::vector<double> leftPositions = getMotorPositionsInches(leftDrive.get_position_all());
-    std::vector<double> rightPositions = getMotorPositionsInches(rightDrive.get_position_all());
-    double lateralPos = ticksToInches(lateralEncoder.get_position());
+    std::vector<double> leftPositions = getMotorPositionsInches(leftDrive.get_position_all(), getAveragePosition(prevLeftPos));
+    std::vector<double> rightPositions = getMotorPositionsInches(rightDrive.get_position_all(), getAveragePosition(prevLeftPos));
+    double lateralPos = latTicksToInches(lateralEncoder.get_position());
+    // lateralEncoder.
     
-    double currentLeftPos = validateAndFilterEncoders(leftPositions, prevLeftPos, deltaTime);
-    double currentRightPos = validateAndFilterEncoders(rightPositions, prevRightPos, deltaTime);
+    double currentLeftPos = getAveragePosition(leftPositions);
+    double currentRightPos = getAveragePosition(rightPositions);
+
     
     // Calculate position changes
     double deltaLeft = currentLeftPos - getAveragePosition(prevLeftPos);
@@ -220,7 +229,7 @@ void Odometry::update() {
         currentPose.y += deltaY;
     }
     
-    currentPose.theta = filteredHeading;
+    currentPose.theta = normalizeAngle(currentPose.theta + deltaTheta);
     
     // Update previous values
     prevLeftPos = leftPositions;
@@ -228,6 +237,11 @@ void Odometry::update() {
     prevLateralPos = lateralPos;
     prevTime = lastUpdateTime;
     lastUpdateTime = currentTime;
+
+    lateralEncoder.reset();
+    imu.tare_heading();
+    leftDrive.tare_position_all();
+    rightDrive.tare_position_all();
 }
 
 // Getter implementations
@@ -335,7 +349,7 @@ Odometry::DebugInfo Odometry::getDebugInfo() {
         rightVelocity.linear,
         leftVelocityFilter.update(leftVelocity.linear),
         rightVelocityFilter.update(rightVelocity.linear),
-        degreesToRadians(imu.get_rotation()),
+        degreesToRadians(imu.get_heading()),
         currentPose.theta,
         positionFilter.getState(),
         getPositionUncertainty()

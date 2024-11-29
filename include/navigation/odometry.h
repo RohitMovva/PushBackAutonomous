@@ -85,9 +85,10 @@ private:
     
     // Helper functions
     double ticksToInches(double ticks);
+    double latTicksToInches(int ticks);
     double degreesToRadians(double degrees);
     double getAveragePosition(const std::vector<double>& positions);
-    std::vector<double> getMotorPositionsInches(const std::vector<double>& motorPositions);
+    std::vector<double> getMotorPositionsInches(const std::vector<double>& motorPositions, double prevPos);
     bool isValidEncoderReading(double newPos, double oldPos, double deltaTime);
     double validateAndFilterEncoders(const std::vector<double>& positions,
                                    const std::vector<double>& prevPositions,

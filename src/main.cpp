@@ -1,6 +1,112 @@
 #include "main.h"
 #include <cstring>
+#include <iostream>
 
+class LadyBrown {
+private:
+    pros::Motor lift_motor;
+    std::atomic<int> target_state{0};
+    int reset_countdown = 0;
+    
+    // PID constants - these may need tuning
+    const double kP = 1.3;
+    const double kI = 0.3;
+    const double kD = 0.7;
+    
+    // Position setpoints in degrees (adjusted for gear ratio)
+    // With 12:64 ratio, multiply desired angles by (64/12) = 5.33
+    const double STATE_POSITIONS[3] = {
+        0.0,
+        16.00 * (64.0/12.0),    // ~53.3 degrees at motor
+        117.5 * (64.0/12.0)    // ~586.7 degrees at motor
+    };
+    
+    // PID variables
+    double integral = 0;
+    double prev_error = 0;
+    
+    // Helper function to calculate PID
+    double calculatePID(double current_pos, double target_pos) {
+        double error = target_pos - current_pos;
+        
+        // Update integral with anti-windup
+        integral = integral + error;
+        if (std::abs(integral) > 50) {  // Limit integral windup
+            integral = (integral > 0) ? 50 : -50;
+        }
+        
+        // Calculate derivative
+        double derivative = error - prev_error;
+        prev_error = error;
+        
+        // Calculate PID output
+        double output = (kP * error) + (kI * integral) + (kD * derivative);
+        
+        // Limit output to motor voltage range (-127 to 127)
+        return std::clamp(output, -127.0, 127.0);
+    }
+
+public:
+    LadyBrown(int motor_port, bool reverse = false) : 
+        lift_motor(motor_port) {
+        // Configure motor settings
+        lift_motor.set_gearing(pros::E_MOTOR_GEARSET_36); // 36:1 green cartridge
+        lift_motor.set_reversed(reverse);
+        lift_motor.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+        lift_motor.set_encoder_units(pros::E_MOTOR_ENCODER_DEGREES);
+        lift_motor.tare_position();
+    }
+    
+    void setState(int new_state) {
+        if (new_state >= 0 && new_state <= 2) {
+            target_state = new_state;
+        }
+        if (new_state == 0) {
+            reset_countdown = 50;
+        }
+    }
+    
+    int getState() const {
+        return target_state;
+    }
+    
+    // This should be run in a separate task
+    void update() {
+        int cnt = 0;
+        while (true) {
+            int current_state = target_state.load();
+            if (current_state == 0 && false)  {
+                if (reset_countdown > 0) {
+                    reset_countdown--;
+                    lift_motor.move(-127);  // Move motor down to reset position
+                } else {
+                    lift_motor.move(0);  // Stop motor in resting state
+                    integral = 0;  // Reset integral when resting
+                    prev_error = 0;
+                }
+                lift_motor.tare_position();  // Reset encoder position
+            } else {
+                double current_pos = lift_motor.get_position();
+                double target_pos = STATE_POSITIONS[current_state];
+                
+                double output = calculatePID(current_pos, target_pos);
+                lift_motor.move(output);
+            }
+            cnt++;
+            pros::delay(20);  // Run at 50Hz
+        }
+    }
+    
+    // Helper method to start the control loop
+    static void startTask(void* param) {
+        LadyBrown* instance = static_cast<LadyBrown*>(param);
+        instance->update();
+    }
+    
+    void start() {
+        pros::Task control_task(startTask, this, "LadyBrown");
+    }
+};
 // Global Vars
 
 // Robot config
@@ -8,6 +114,8 @@ pros::Controller master(pros::E_CONTROLLER_MASTER);
 pros::MotorGroup left_mg({-13, -6, -15});    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
 pros::MotorGroup right_mg({16, 19, 18});  // Creates a motor group with forwards port 5 and reversed ports 4 & 6
 pros::MotorGroup intake({-1, 12});
+LadyBrown lady_brown(2);  // Replace 1 with your motor port
+int lady_brown_state = 0;
 
 pros::Imu imu_sensor(5);
 
@@ -26,7 +134,7 @@ float prev_heading;
 
 
 
-pros::Rotation side_encoder(6); // Lateral tracking encoder (PORT MIGHT BE WRONG)
+pros::Rotation side_encoder(10); // Lateral tracking encoder (PORT MIGHT BE WRONG)
 // Program types
 // std::string program_type = "driver";
 // std::string program_type = "autonomous";
@@ -35,7 +143,7 @@ std::string program_type = "autonomous";
 // std::string program_type = "calibrate_metrics";
 
 // Routes
-std::vector<std::vector<double>> route = testy;
+std::vector<std::vector<double>> route = test;
 // std::vector<std::vector<float>> route = {}; // Driver or Calibration
 
 // Robot parameters (needs to be tweaked later)
@@ -43,7 +151,7 @@ const float WHEEL_DIAMETER = 2.75;  // Diameter of the wheels in inches
 // TODO update for blue cartridges on new bot
 const float TICKS_PER_ROTATION = 300.0;  // Encoder ticks per wheel rotation for green cartridges
 const float GEAR_RATIO = 36.0/48.0;  // Gear ratio of the drivetrain
-const double WHEEL_BASE_WIDTH = 12.5;  // Distance between the left and right wheels in inches
+const double WHEEL_BASE_WIDTH = 12.7;  // Distance between the left and right wheels in inches
 const float DT = 0.025;  // Time step in seconds (25 ms)
 
 // Function to convert encoder ticks to distance in inches
@@ -176,6 +284,9 @@ void start_color_detection(const char* color) {
     pros::Task color_detection_task(color_piston_control, (void*)color_param, "Color Detection");
 }
 
+
+
+
 /**
  * @brief Follow a 2D motion profile using RAMSETE and drivetrain controllers
  * 
@@ -194,19 +305,24 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
                      DrivetrainController& drivetrain,
                      pros::MotorGroup& left_mg,
                      pros::MotorGroup& right_mg,
-                     int timeout = 1e9) {
+                     int timeout = 1e9) { // Not using timeout for now
     
     if (route.empty()) return false;
     
     const double START_TIME = pros::millis();
     const double DT = 25;  // 25ms fixed timestep matching motion profile
-    const double track_width = 15.0; // inches, adjust based on your robot
+    const double track_width = 12.7; // inches
     size_t trajectory_index = 1;
     Pose new_pos = {route[1][1], route[1][2], route[1][3]};
     odometry.setPose(new_pos);
+
     
     // Main control loop
     while (trajectory_index < route.size()) {
+        pros::lcd::print(0, "Trajectory index: %d", trajectory_index);
+        pros::lcd::print(1, "Pose %f %f %f", odometry.getPose().x, odometry.getPose().y, odometry.getPose().theta);
+        odometry.update();
+        pros::lcd::print(2, "New %f %f %f", odometry.getPose().x, odometry.getPose().y, odometry.getPose().theta);
         const double current_time = pros::millis() - START_TIME;
         
         // Timeout check
@@ -260,8 +376,12 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
         // Calculate accelerations using next waypoint
         double left_accel = 0.0;
         double right_accel = 0.0;
-        if (trajectory_index + 1 < route.size()) {
-            const auto& next = route[trajectory_index + 1];
+        int next_index = trajectory_index + 1;
+        while (next_index < route.size() && route[next_index].size() < 6) {
+            next_index++;
+        }
+        if (next_index < route.size()) {
+            const auto& next = route[next_index];
             
             // Calculate wheel velocities at current and next timestep
             const double current_left = goal_v - (goal_w * track_width / 2.0);
@@ -277,20 +397,24 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
             right_accel = (next_right - current_right) / (DT / 1000.0);
         }
         
+        pros::lcd::print(3, "Goal %f %f %f", goal_x, goal_y, goal_theta);
         // Get RAMSETE controller output
         auto ramsete_output = ramsete.calculate(
             current_pose.x, current_pose.y, current_pose.theta,
             goal_x, goal_y, goal_theta,
             goal_v, goal_w
         );
+        pros::lcd::print(4, "Ramsete %f %f", ramsete_output[0], ramsete_output[1]);
         
         // Convert RAMSETE output to wheel velocities
         auto wheel_velocities = ramsete.calculate_wheel_velocities(
-            ramsete_output[0], // linear velocity
-            ramsete_output[1], // angular velocity
+            goal_v, // linear velocity
+            goal_w, // angular velocity
             2.75,             // wheel diameter (inches)
-            48.0/36.0         // gear ratio
+            48.0/36.0,         // gear ratio
+            track_width       // track width (inches)
         );
+        pros::lcd::print(5, "Wheel %f %f", wheel_velocities[0], wheel_velocities[1]);
         
         // Calculate motor voltages using drivetrain controller
         auto voltages = drivetrain.calculateVoltages(
@@ -301,40 +425,44 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
             left_accel,         // left acceleration
             right_accel         // right acceleration
         );
+        pros::lcd::print(6, "Voltage %d %d", voltages.left, voltages.right);
         
         // Apply voltages to motors
         left_mg.move(voltages.left);
         right_mg.move(voltages.right);
+
+        std::cout << wheel_velocities[0] << " " << velocities.first << "\n";
         
         // Check if we're at the final waypoint
-        if (trajectory_index == route.size() - 1) {
-            const double position_tolerance = 1.0;  // inches
-            const double heading_tolerance = 0.1;   // radians
+        // if (trajectory_index == route.size() - 1) {
+        //     const double position_tolerance = 1.0;  // inches
+        //     const double heading_tolerance = 0.1;   // radians
             
-            const double position_error = std::sqrt(
-                std::pow(current_pose.x - goal_x, 2) +
-                std::pow(current_pose.y - goal_y, 2)
-            );
-            const double heading_error = std::abs(current_pose.theta - goal_theta);
+        //     const double position_error = std::sqrt(
+        //         std::pow(current_pose.x - goal_x, 2) +
+        //         std::pow(current_pose.y - goal_y, 2)
+        //     );
+        //     const double heading_error = std::abs(current_pose.theta - goal_theta);
             
-            if (position_error < position_tolerance && heading_error < heading_tolerance) {
-                // Stop motors
-                left_mg.move(0);
-                right_mg.move(0);
-                return true;
-            }
-        }
+        //     if (position_error < position_tolerance && heading_error < heading_tolerance) {
+        //         // Stop motors
+        //         left_mg.move(0);
+        //         right_mg.move(0);
+        //         return true;
+        //     }
+        // }
         
         // Increment trajectory index based on fixed timestep
-        // if (current_time >= (trajectory_index + 1) * DT) {
         trajectory_index++;
-        // }
         
         // Wait until next timestep
         // const double elapsed = pros::millis() - START_TIME;
         // const double next_timestep = (trajectory_index + 1) * DT;
         // const double delay_time = next_timestep - elapsed;
         // if (delay_time > 0) {
+        // if (trajectory_index == 40){
+        //     break;
+        // }
         pros::delay(DT);
         // }
     }
@@ -372,9 +500,13 @@ void initialize() {
 	pros::lcd::set_text(1, "Hello PROS User!");
 	pros::lcd::register_btn1_cb(on_center_button);
 
+    std::cin.tie(0);
+
 	left_mg.set_encoder_units_all(pros::E_MOTOR_ENCODER_COUNTS);
 	right_mg.set_encoder_units_all(pros::E_MOTOR_ENCODER_COUNTS);
     // pinMode(1, OUTPUT);
+
+    lady_brown.start();  // Start the control task
 
 	// Calibrate the inertial sensor
     imu_sensor.reset();
@@ -416,8 +548,15 @@ void competition_initialize() {
 void autonomous() {
 	if (program_type == "autonomous"){
         Odometry odometry(left_mg, right_mg, side_encoder, imu_sensor, WHEEL_BASE_WIDTH, 0.0, false, false, false);
-        RamseteController ramsete(2.0, 0.7, 5.35, 5.0, 0.3048);
-        DrivetrainController drivetrain(5.0, 0, 0, 0, 0, 0);
+        RamseteController ramsete(2.0, 0.7, 5.35*12, 5.0, 0.0254000508);
+        DrivetrainController drivetrain(15.25, 0.05, 0, 0, 0, 0);
+        // std::vector<double> velos =  drivetrain.calculateVoltages(5, 5, 0, 0, 0, 0);
+        // left_mg.move_velocity(); 
+        // pros::delay(1000);
+        // while (true){
+        //     pros::lcd::print(1, "Lateral encoder position: %d", side_encoder.get_position());
+        //     pros::delay(20);
+        // }
         followTrajectory(route, odometry, ramsete, drivetrain, left_mg, right_mg);
     }
 }
@@ -442,6 +581,7 @@ int joystickCurve(int x, double a=2.5){
  * task, not resume it from where it left off.
  */
 void opcontrol() {
+    bool prev_lady_brown_state = false;
 	while (true) {
 		// Arcade control scheme
 		int dir = (master.get_analog(ANALOG_LEFT_Y));    // Gets amount forward/backward from left joystick
@@ -463,6 +603,11 @@ void opcontrol() {
             master.rumble("-");
         }
 
+        if (!prev_lady_brown_state && master.get_digital(DIGITAL_L2)){
+            lady_brown_state = (lady_brown_state + 1) % 3;
+            lady_brown.setState(lady_brown_state);
+        }
+        prev_lady_brown_state = master.get_digital(DIGITAL_L2);
         color_sort.input_toggle(master.get_digital(DIGITAL_DOWN));
 
         doinker.input_toggle(master.get_digital(DIGITAL_B));

@@ -77,6 +77,7 @@ DrivetrainController::MotorVoltages DrivetrainController::calculateVoltages(
         rightDerivative);
     
     // Combine feedforward and feedback
+    pros::lcd::print(8, "right %f %f", rightFeedforward, rightFeedback);
     int leftVoltage = static_cast<int>(leftFeedforward + leftFeedback);
     int rightVoltage = static_cast<int>(rightFeedforward + rightFeedback);
     

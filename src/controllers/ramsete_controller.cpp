@@ -1,4 +1,5 @@
 #include "controllers/ramsete_controller.h"
+#include "api.h"
 
 RamseteController::RamseteController()
     : b_(2.0)
@@ -79,16 +80,22 @@ std::vector<double> RamseteController::get_output_velocities(double v, double w,
 std::vector<double> RamseteController::calculate_wheel_velocities(double linear_velocity,
                                                                 double angular_velocity,
                                                                 double wheel_diameter,
-                                                                double gear_ratio) {
+                                                                double gear_ratio,
+                                                                double track_width) {
     std::vector<double> wheel_velocities;
-    double linear_motor_velocity = linear_velocity * 60.0 / (M_PI * wheel_diameter) / gear_ratio;
-    double angular_motor_velocity = angular_velocity * 60.0 / (M_PI * wheel_diameter) / gear_ratio;
     
-    wheel_velocities.push_back(linear_motor_velocity + angular_motor_velocity);
-    wheel_velocities.push_back(linear_motor_velocity - angular_motor_velocity);
+    // Calculate wheel speed difference based on angular velocity
+    // angular_velocity (rad/s) * track_width/2 (inches) = inches/sec
+    double wheel_speed_diff = angular_velocity * track_width / 2.0;
+    pros::lcd::print(7, "Wheel %f %f", linear_velocity, wheel_speed_diff);
+    
+    // Calculate left and right wheel velocities in inches/sec
+    wheel_velocities.push_back(linear_velocity + wheel_speed_diff);
+    wheel_velocities.push_back(linear_velocity - wheel_speed_diff);
     
     return wheel_velocities;
 }
+
 std::vector<double> RamseteController::calculate(double x, double y, double theta,
                                                double goal_x, double goal_y, double goal_theta,
                                                double v_ref, double w_ref) {

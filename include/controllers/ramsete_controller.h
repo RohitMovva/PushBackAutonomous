@@ -98,12 +98,14 @@ public:
      * @param angular_velocity Desired angular velocity
      * @param wheel_diameter Wheel diameter in inches
      * @param gear_ratio Gear ratio (output/input)
-     * @return std::vector<double> Wheel velocities [left_rpm, right_rpm]
+     * @param track_width Track width in inches
+     * @return std::vector<double> Wheel velocities [left_velocity, right_velocity]
      */
     std::vector<double> calculate_wheel_velocities(double linear_velocity,
                                                  double angular_velocity,
                                                  double wheel_diameter,
-                                                 double gear_ratio);
+                                                 double gear_ratio,
+                                                 double track_width);
 
     /**
      * @brief Calculate control output for trajectory tracking
