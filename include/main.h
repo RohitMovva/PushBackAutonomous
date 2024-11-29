@@ -35,20 +35,11 @@
 #define PROS_USE_LITERALS
 
 #include "api.h"
-#include "pros/colors.h"
-#include "routes/routes.h"
-#include "navigation/odometry.h"
-#include "controllers/ramsete_controller.h"
-#include "controllers/drivetrain_controller.h"
-#include "hardware/enhanced_digital_out.h"
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <sstream>
-#include <vector>
-#include <algorithm>
-#include <atomic>
 
+/**
+ * You should add more #includes here
+ */
+//#include "okapi/api.hpp"
 
 /**
  * If you find doing pros::Motor() to be tedious and you'd prefer just to do
