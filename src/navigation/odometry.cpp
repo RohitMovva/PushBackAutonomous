@@ -1,6 +1,7 @@
 #include "navigation/odometry.h"
 #include <algorithm>
 #include <numeric>
+#include "utilities/logger.h"
 
 // Pose implementation
 Pose::Pose(double x, double y, double theta)
@@ -45,13 +46,14 @@ Odometry::Odometry(pros::MotorGroup& left, pros::MotorGroup& right,
     , rightDrive(right)
     , lateralEncoder(lateral)
     , imu(imuSensor)
-    , leftVelocityFilter(0.7)
-    , rightVelocityFilter(0.7)
+    , leftVelocityFilter(0.3)
+    , rightVelocityFilter(0.3)
     , headingFilter() // 0.8
     , useHeadingFilter(enable_heading_filter)
     , useVelocityFilters(enable_velocity_filters)
     , usePositionFilter(enable_position_filter)
 {
+    // Logger *logger = Logger::getInstance();
     reset();
 }
 
@@ -67,6 +69,9 @@ double Odometry::latTicksToInches(int ticks) {
 
 
 double Odometry::degreesToRadians(double degrees) {
+    // wrap degrees to [-180, 180]
+    while (degrees > 180) degrees -= 360;
+    while (degrees < -180) degrees += 360;
     return degrees * M_PI / 180.0;
 }
 
@@ -134,6 +139,7 @@ void Odometry::reset() {
 void Odometry::update() {
     double currentTime = pros::millis() / 1000.0;
     double deltaTime = currentTime - lastUpdateTime;
+    deltaTime = 0.025;
     
     // if (lastUpdateTime == 0.0) {
     //     lastUpdateTime = currentTime;
@@ -141,24 +147,28 @@ void Odometry::update() {
     //     return;
     // }
 
-    if (deltaTime < 0.001 || deltaTime > 1.0) {  // Reject unrealistic time deltas
-        lastUpdateTime = currentTime;
-        prevTime = lastUpdateTime;
-        return;
-    }
+    // if (deltaTime < 0.001 || deltaTime > 1.0) {  // Reject unrealistic time deltas
+    //     lastUpdateTime = currentTime;
+    //     prevTime = lastUpdateTime;
+    //     return;
+    // }
 
 
     // Handle heading updates with toggle
     double filteredHeading;
     if (useHeadingFilter) {
         headingFilter.predict(deltaTime);
-        double measured_heading = degreesToRadians(imu.get_heading());
+        double measured_heading = degreesToRadians(imu.get_heading()*-1);
         double measured_angular_velocity = degreesToRadians(imu.get_gyro_rate().x);
         headingFilter.update(measured_heading, measured_angular_velocity, true);
         filteredHeading = headingFilter.getHeading();
     } else {
-        filteredHeading = degreesToRadians(imu.get_heading());
+        filteredHeading = degreesToRadians(imu.get_heading()*-1);
     }
+
+    // Log imu reading
+    Logger::getInstance()->log("IMU Heading: %f", imu.get_heading()*-1);
+    Logger::getInstance()->log("Heading: %f", filteredHeading);
     
     // double deltaTheta = angleDifference(filteredHeading, currentPose.theta);
     double deltaTheta = filteredHeading;
@@ -168,6 +178,8 @@ void Odometry::update() {
     std::vector<double> rightPositions = getMotorPositionsInches(rightDrive.get_position_all(), getAveragePosition(prevLeftPos));
     double lateralPos = latTicksToInches(lateralEncoder.get_position());
     // lateralEncoder.
+    lateralPos = 0;
+
     
     double currentLeftPos = getAveragePosition(leftPositions);
     double currentRightPos = getAveragePosition(rightPositions);
@@ -176,8 +188,8 @@ void Odometry::update() {
     // Calculate position changes
     double deltaLeft = currentLeftPos - getAveragePosition(prevLeftPos);
     double deltaRight = currentRightPos - getAveragePosition(prevRightPos);
+    Logger::getInstance()->log("DeltaLeft: %f, DeltaRight: %f", deltaLeft, deltaRight);
     double deltaLateral = lateralPos - prevLateralPos;
-    
     // Update velocities with optional filtering
     if (useVelocityFilters) {
         leftVelocity.linear = leftVelocityFilter.update(deltaLeft / deltaTime);
@@ -195,7 +207,12 @@ void Odometry::update() {
     
     // Calculate forward displacement
     double forwardDisplacement = (deltaLeft + deltaRight) / 2.0;
-    
+    Logger::getInstance()->log("Forward displacement: %f", forwardDisplacement);
+
+    // Log the delta theta
+    Logger::getInstance()->log("Delta theta: %f", deltaTheta);
+    // Log delta time
+    Logger::getInstance()->log("Delta time: %f", deltaTime);
     // Local position update
     double deltaX, deltaY;
     
@@ -216,6 +233,8 @@ void Odometry::update() {
         deltaY = forwardDisplacement * sin(currentPose.theta) +
                 deltaLateral * cos(currentPose.theta);
     }
+
+    Logger::getInstance()->log("DeltaX: %f, DeltaY: %f", deltaX, deltaY);
     
     // Update position with optional Kalman filtering
     if (usePositionFilter) {
@@ -349,7 +368,7 @@ Odometry::DebugInfo Odometry::getDebugInfo() {
         rightVelocity.linear,
         leftVelocityFilter.update(leftVelocity.linear),
         rightVelocityFilter.update(rightVelocity.linear),
-        degreesToRadians(imu.get_heading()),
+        degreesToRadians(imu.get_heading()*-1),
         currentPose.theta,
         positionFilter.getState(),
         getPositionUncertainty()

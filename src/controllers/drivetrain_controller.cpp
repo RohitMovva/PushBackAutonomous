@@ -77,7 +77,6 @@ DrivetrainController::MotorVoltages DrivetrainController::calculateVoltages(
         rightDerivative);
     
     // Combine feedforward and feedback
-    pros::lcd::print(8, "right %f %f", rightFeedforward, rightFeedback);
     int leftVoltage = static_cast<int>(leftFeedforward + leftFeedback);
     int rightVoltage = static_cast<int>(rightFeedforward + rightFeedback);
     
@@ -94,6 +93,10 @@ DrivetrainController::MotorVoltages DrivetrainController::calculateVoltages(
 }
 
 double DrivetrainController::calculateFeedforward(double velocityTicks, double accelerationTicks) {
+    // double new_Ka = kA;
+    // if (std::signbit(accelerationTicks) == -1) {
+    //     new_Ka *= 1.5;
+    // }
     return std::copysign(kS, velocityTicks) + 
            kV * velocityTicks + 
            kA * accelerationTicks;

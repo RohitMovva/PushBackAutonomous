@@ -15,3 +15,10 @@ temp.log
 temp.errors
 *.ini
 .d/
+
+# Logs
+*.log
+logs/
+
+# Velocity files
+velocity_graphs/

@@ -87,11 +87,10 @@ std::vector<double> RamseteController::calculate_wheel_velocities(double linear_
     // Calculate wheel speed difference based on angular velocity
     // angular_velocity (rad/s) * track_width/2 (inches) = inches/sec
     double wheel_speed_diff = angular_velocity * track_width / 2.0;
-    pros::lcd::print(7, "Wheel %f %f", linear_velocity, wheel_speed_diff);
     
     // Calculate left and right wheel velocities in inches/sec
-    wheel_velocities.push_back(linear_velocity + wheel_speed_diff);
     wheel_velocities.push_back(linear_velocity - wheel_speed_diff);
+    wheel_velocities.push_back(linear_velocity + wheel_speed_diff);
     
     return wheel_velocities;
 }
@@ -124,8 +123,7 @@ std::vector<double> RamseteController::calculate(double x, double y, double thet
     
     // Calculate gains with enhanced stability
     bool is_low_speed = std::abs(v_ref) < 0.5;
-    double k = 2.0 * zeta_ * std::sqrt(w_ref * w_ref + b_ * std::abs(v_ref) * std::abs(v_ref)) * 
-            (is_low_speed ? 1.3 : (distance_error < 0.1 ? 1.2 : 1.0));
+    double k = 2.0 * zeta_ * std::sqrt(w_ref * w_ref + b_ * std::abs(v_ref) * std::abs(v_ref));
     
     // Calculate velocities with safe handling of small angles
     double v = v_ref * std::cos(e_theta) + k * e_x;
@@ -138,7 +136,7 @@ std::vector<double> RamseteController::calculate(double x, double y, double thet
     }
 
     // Apply velocity limits with low-speed consideration
-    if (is_low_speed) {
+    if (is_low_speed && false) {
         double limit = std::abs(v_ref) * 1.1;
         v = std::clamp(v, -limit, limit);
     } else {
