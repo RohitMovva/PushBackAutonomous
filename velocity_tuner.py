@@ -84,7 +84,7 @@ def plot_data(vel_df, volt_df, plot_integral=False):
     
     # Save the plot
     plt.tight_layout()
-    plt.savefig(filename, dpi=300, bbox_inches='tight')
+    # plt.savefig(filename, dpi=300, bbox_inches='tight')
     print(f"Plot saved as: {filename}")
     
     # Show the plot
@@ -93,7 +93,7 @@ def plot_data(vel_df, volt_df, plot_integral=False):
 # Main execution
 if __name__ == "__main__":
 
-    vel_df, volt_df = parse_data('logs/robot_log_19700101_000000.txt')
+    vel_df, volt_df = parse_data('robot_log_19700101_000000.txt')
     
     # Create both velocity and integral plots with voltage
     plot_data(vel_df, volt_df, plot_integral=False)  # Velocity plot

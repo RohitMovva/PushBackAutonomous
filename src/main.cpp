@@ -119,7 +119,7 @@ public:
 
 // Robot config
 pros::Controller master(pros::E_CONTROLLER_MASTER);
-pros::MotorGroup left_mg({-14, -6, -16});    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
+pros::MotorGroup left_mg({-14, -4, -16});    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
 pros::MotorGroup right_mg({15, 19, 18});  // Creates a motor group with forwards port 5 and reversed ports 4 & 6
 pros::MotorGroup intake({-1, 12});
 LadyBrown lady_brown(2);  // Replace 1 with your motor port
@@ -156,13 +156,13 @@ std::string program_type = "autonomous";
 // std::string program_type = "calibrate_metrics";
 
 // Routes
-std::vector<std::vector<double>> route = mirrored_solo_awp;
+std::vector<std::vector<double>> route = bad;
 // std::vector<std::vector<float>> route = {}; // Driver or Calibration
 
 // Robot parameters (needs to be tweaked later)
 const float WHEEL_DIAMETER = 2.75;  // Diameter of the wheels in inches
 // TODO update for blue cartridges on new bot
-const float TICKS_PER_ROTATION = 300.0;  // Encoder ticks per wheel rotation for green cartridges
+const float TICKS_PER_ROTATION = 300.0;  // Encoder ticks per wheel rotation for blue cartridges
 const float GEAR_RATIO = 36.0/48.0;  // Gear ratio of the drivetrain
 const double WHEEL_BASE_WIDTH = 12.7;  // Distance between the left and right wheels in inches
 const float DT = 0.025;  // Time step in seconds (25 ms)
@@ -300,6 +300,7 @@ void start_color_detection(const char* color) {
 
 
 
+
 /**
  * @brief Follow a 2D motion profile using RAMSETE and drivetrain controllers
  * 
@@ -327,7 +328,7 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
     const double DT = 25;  // 25ms fixed timestep matching motion profile
     const double track_width = 12.7; // inches
     size_t trajectory_index = 1;
-    Pose new_pos = {route[1][1], route[1][2], route[1][3]};
+    Pose new_pos = {route[1][2], route[1][3], route[1][4]};
     odometry.setPose(new_pos);
 
     
@@ -346,18 +347,20 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
         auto velocities = odometry.getFilteredVelocities();
         
         // Check if the current waypoint is a node instead of a trajectory point
-        while (trajectory_index < route.size() && route[trajectory_index].size() < 6) {
+        while (trajectory_index < route.size() && route[trajectory_index][0] == 1) {
             // Handle node
             const auto& node = route[trajectory_index];
             
             // Move intake (value is either -1, 0, or 1)
-            intake.move(127*node[0]);
+            intake.move(127*node[1]);
 
             // Toggle clamp state
-            if (node[1]){
+            if (node[2]){
                 clamp_state = !clamp_state;
                 mogo_mech.set_value(clamp_state);
             }
+
+            lady_brown.setState(node[6]);
             // Doinker prolly
 
             // Lady brown
@@ -377,11 +380,11 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
 
         // Get desired state from trajectory
         const auto& waypoint = route[trajectory_index];
-        const double goal_x = waypoint[1];
-        const double goal_y = waypoint[2];
-        const double goal_theta = waypoint[3];
-        const double goal_v = waypoint[4];
-        const double goal_w = waypoint[5];
+        const double goal_x = waypoint[2];
+        const double goal_y = waypoint[3];
+        const double goal_theta = waypoint[4];
+        const double goal_v = waypoint[5];
+        const double goal_w = waypoint[6];
         logger->log("Pose: %f %f %f", current_pose.x, current_pose.y, current_pose.theta);
         logger->log("Goal: %f %f %f", goal_x, goal_y, goal_theta);
 
@@ -389,7 +392,7 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
         double left_accel = 0.0;
         double right_accel = 0.0;
         int next_index = trajectory_index + 1;
-        while (next_index < route.size() && route[next_index].size() < 6) {
+        while (next_index < route.size() && route[next_index][0] == 1) {
             next_index++;
         }
         if (next_index < route.size()) {
@@ -399,14 +402,26 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
             const double current_left = goal_v - (goal_w * track_width / 2.0);
             const double current_right = goal_v + (goal_w * track_width / 2.0);
             
-            const double next_v = next[4];
-            const double next_w = next[5];
+            const double next_v = next[5];
+            const double next_w = next[6];
+
             const double next_left = next_v - (next_w * track_width / 2.0);
             const double next_right = next_v + (next_w * track_width / 2.0);
             
             // Calculate acceleration over the fixed timestep
             left_accel = (next_left - current_left) / (DT / 1000.0);  // Convert ms to seconds
             right_accel = (next_right - current_right) / (DT / 1000.0);
+
+            // Clamp to [-4.5, 4.5] in/s^2
+            // left_accel = std::clamp(left_accel, -4.5, 4.5);
+            // right_accel = std::clamp(right_accel, -4.5, 4.5);
+
+            // Debugging left acceleration
+            logger->log("Velocities: %f %f", goal_v, next_v);
+            logger->log("Next left: %f, Current left: %f", next_left, current_left);
+            logger->log("Left accel: %f, Right accel: %f", left_accel, right_accel);
+            logger->log("Next v: %f, Next w: %f", next_v, next_w);
+            // logger->log("Next v: %f, Next w: %f", next_v, next_w);
         }
         
         // if (goal)
@@ -416,8 +431,8 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
             goal_x, goal_y, goal_theta,
             goal_v, goal_w
         );
-        logger->log("Ramsete output: %f %f", ramsete_output[0], ramsete_output[1]);
-        logger->log("Ramsete output: %f %f", goal_v, goal_w);
+        logger->log("Ramsete Output: %f %f", ramsete_output[0], ramsete_output[1]);
+        logger->log("MP Output: %f %f", goal_v, goal_w);
         velocities = odometry.getFilteredVelocities();
         
         // Convert RAMSETE output to wheel velocities
@@ -445,40 +460,14 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
         // Apply voltages to motors
         left_mg.move(voltages.left);
         right_mg.move(voltages.right);
+        logger->log("leftmg voltage %d", right_mg.get_voltage());
 
         // std::cout << wheel_velocities[0] << " " << velocities.first << std::endl;
         // logger->log("Wheel velocities: %f %f", wheel_velocities[0], odometry.getLeftVelocity());
         
-        // Check if we're at the final waypoint
-        // if (trajectory_index == route.size() - 1) {
-        //     const double position_tolerance = 1.0;  // inches
-        //     const double heading_tolerance = 0.1;   // radians
-            
-        //     const double position_error = std::sqrt(
-        //         std::pow(current_pose.x - goal_x, 2) +
-        //         std::pow(current_pose.y - goal_y, 2)
-        //     );
-        //     const double heading_error = std::abs(current_pose.theta - goal_theta);
-            
-        //     if (position_error < position_tolerance && heading_error < heading_tolerance) {
-        //         // Stop motors
-        //         left_mg.move(0);
-        //         right_mg.move(0);
-        //         return true;
-        //     }
-        // }
-        
         // Increment trajectory index based on fixed timestep
         trajectory_index++;
         
-        // Wait until next timestep
-        // const double elapsed = pros::millis() - START_TIME;
-        // const double next_timestep = (trajectory_index + 1) * DT;
-        // const double delay_time = next_timestep - elapsed;
-        // if (delay_time > 0) {
-        // if (trajectory_index == 40){
-        //     break;
-        // }
         pros::delay(DT);
         // }
     }
@@ -515,6 +504,8 @@ void initialize() {
 	pros::lcd::initialize();
 	pros::lcd::set_text(1, "Hello PROS User!");
 	pros::lcd::register_btn1_cb(on_center_button);
+    start_color_detection("red");
+
 
     // std::cin.tie(0);
 
@@ -601,6 +592,7 @@ int joystickCurve(int x, double a=2.5){
 void opcontrol() {
     bool prev_lady_brown_state = false;
     printf("Starting opcontrol\n");
+
 	while (true) {
 		// Arcade control scheme
 		int dir = (master.get_analog(ANALOG_LEFT_Y));    // Gets amount forward/backward from left joystick

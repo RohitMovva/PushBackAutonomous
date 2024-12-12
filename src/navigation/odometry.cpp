@@ -147,13 +147,6 @@ void Odometry::update() {
     //     return;
     // }
 
-    // if (deltaTime < 0.001 || deltaTime > 1.0) {  // Reject unrealistic time deltas
-    //     lastUpdateTime = currentTime;
-    //     prevTime = lastUpdateTime;
-    //     return;
-    // }
-
-
     // Handle heading updates with toggle
     double filteredHeading;
     if (useHeadingFilter) {
@@ -175,14 +168,18 @@ void Odometry::update() {
     
     // Get and validate encoder readings
     std::vector<double> leftPositions = getMotorPositionsInches(leftDrive.get_position_all(), getAveragePosition(prevLeftPos));
-    std::vector<double> rightPositions = getMotorPositionsInches(rightDrive.get_position_all(), getAveragePosition(prevLeftPos));
+    std::vector<double> rightPositions = getMotorPositionsInches(rightDrive.get_position_all(), getAveragePosition(prevRightPos));
     double lateralPos = latTicksToInches(lateralEncoder.get_position());
     // lateralEncoder.
     lateralPos = 0;
+    // Left drive info
+    Logger::getInstance()->log("Left Positions: %f %f %f", leftDrive.get_position_all()[0], leftDrive.get_position_all()[1], leftDrive.get_position_all()[2]);
+    Logger::getInstance()->log("Right Positions: %f %f %f", rightDrive.get_position_all()[0], rightDrive.get_position_all()[1], rightDrive.get_position_all()[2]);
 
     
     double currentLeftPos = getAveragePosition(leftPositions);
     double currentRightPos = getAveragePosition(rightPositions);
+    Logger::getInstance()->log("Left: %f, Right: %f", currentLeftPos, currentRightPos);
 
     
     // Calculate position changes
@@ -212,7 +209,6 @@ void Odometry::update() {
     // Log the delta theta
     Logger::getInstance()->log("Delta theta: %f", deltaTheta);
     // Log delta time
-    Logger::getInstance()->log("Delta time: %f", deltaTime);
     // Local position update
     double deltaX, deltaY;
     
