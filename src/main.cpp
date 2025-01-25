@@ -3,7 +3,6 @@
 
 class LadyBrown {
 private:
-    pros::Motor lift_motor;
     std::atomic<int> target_state{0};
     int reset_countdown = 0;
     
@@ -47,6 +46,8 @@ private:
     }
 
 public:
+    pros::Motor lift_motor;
+
     LadyBrown(int motor_port, bool reverse = false) : 
         lift_motor(motor_port) {
         // Configure motor settings
@@ -119,15 +120,16 @@ public:
 
 // Robot config
 pros::Controller master(pros::E_CONTROLLER_MASTER);
-pros::MotorGroup left_mg({-14, -4, -16});    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
-pros::MotorGroup right_mg({15, 19, 18});  // Creates a motor group with forwards port 5 and reversed ports 4 & 6
-pros::MotorGroup intake({-1, 12});
+pros::MotorGroup left_mg({-15, -12, -18});    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
+pros::MotorGroup right_mg({19, 16, 11});  // Creates a motor group with forwards port 5 and reversed ports 4 & 6
+pros::MotorGroup intake({-13, 17});
+pros::Motor lb(14);
 LadyBrown lady_brown(2);  // Replace 1 with your motor port
 int lady_brown_state = 0;
 
 pros::Imu imu_sensor(5);
 
-const int GOAL_CLAMP_PORT = 8;
+const int GOAL_CLAMP_PORT = 1;
 const int DOINKER_PORT = 7;
 const int INTAKE_LIFT_PORT = 6;
 const int COLOR_SORT_PORT = 5;
@@ -156,8 +158,8 @@ std::string program_type = "autonomous";
 // std::string program_type = "calibrate_metrics";
 
 // Routes
-std::vector<std::vector<double>> route = bad;
-// std::vector<std::vector<float>> route = {}; // Driver or Calibration
+// std::vector<std::vector<double>> route = test; // used to be skills
+std::vector<std::vector<double>> route = {}; // Driver or Calibration
 
 // Robot parameters (needs to be tweaked later)
 const float WHEEL_DIAMETER = 2.75;  // Diameter of the wheels in inches
@@ -166,6 +168,79 @@ const float TICKS_PER_ROTATION = 300.0;  // Encoder ticks per wheel rotation for
 const float GEAR_RATIO = 36.0/48.0;  // Gear ratio of the drivetrain
 const double WHEEL_BASE_WIDTH = 12.7;  // Distance between the left and right wheels in inches
 const float DT = 0.025;  // Time step in seconds (25 ms)
+
+// PID Code
+// PID parameters (need to be tuned, especially heading)
+// float kp_position = 1.6;
+// float ki_position = 0.0;
+// float kd_position = 0.075;
+float kp_position = 1.2;
+float ki_position = 0.0;
+float kd_position = 0.0;
+float kp_heading = .016;
+float ki_heading = 0.0005;
+float kd_heading = 0.0006;
+// float kp_heading = .0175;
+// float ki_heading = 0.0005;
+// float kd_heading = 0.00075;
+
+float kp_heading_op = .016;
+float ki_heading_op = 0.0005;
+float kd_heading_op = 0.0006;
+
+float kp_position_op = 1.9;
+float ki_position_op = 0.0;
+float kd_position_op = 0.00;
+
+// Structure to store the robot's position
+struct Position {
+    float x;
+    float y;
+    float heading;
+};
+
+bool dumb = false;
+
+class PIDController {
+public:
+    PIDController(float kp, float ki, float kd, float intergral_max=5)
+        : kp(kp), ki(ki), kd(kd), integral(0), previous_error(0), intergral_max(intergral_max) {}
+
+    float compute(float setpoint, float current_value, float dt, bool headingCentered=false) {
+        float error = setpoint - current_value;
+        if (headingCentered){
+            if (error < -180.0){
+                error += 360.0;
+            } else if (error > 180.0){
+                error -= 360.0;
+            }
+        }
+        integral += error * dt;
+        if (integral > 5){ // Anti integral wind up, may need tweaking
+            integral = 0;
+        }
+        float derivative = (error - previous_error) / dt;
+        
+        float output = kp * error + ki * integral + kd * derivative;
+        previous_error = error;
+        
+        return output;
+    }
+
+private:
+    float kp, ki, kd;
+    float integral;
+    float intergral_max;
+public:
+    float previous_error;
+};
+
+
+PIDController x_pid(kp_position, ki_position, kd_position);
+PIDController y_pid(kp_position, ki_position, kd_position);
+PIDController heading_pid(kp_heading, ki_heading, kd_heading);
+PIDController heading_pid_op(kp_heading_op, ki_heading_op, kd_heading_op);
+PIDController dist_pid(kp_position_op, ki_position_op, kd_position_op);
 
 // Function to convert encoder ticks to distance in inches
 float ticks_to_feet(int ticks) {
@@ -297,9 +372,261 @@ void start_color_detection(const char* color) {
     pros::Task color_detection_task(color_piston_control, (void*)color_param, "Color Detection");
 }
 
+void apply_control_signal(float linear_velocity, float angular_velocity) {
+    float left_speed = ft_per_sec_to_rpm(linear_velocity - angular_velocity);
+    float right_speed = ft_per_sec_to_rpm(linear_velocity + angular_velocity);
+    // Don't think we need this stuff anymore hopefully, I'll keep it for now just in case
+    // float maxVal = std::max(left_speed, right_speed);
+    // if (maxVal > 200){
+    //     left_speed *= (200/maxVal);
+    //     right_speed *= (200/maxVal);
+    // }
+    // pros::lcd::print(1, "Left velocity: %2.f", left_speed);
+    pros::lcd::print(2, "Right velocity: %2.f", right_speed);
+    left_mg.move_velocity(left_speed);
+    right_mg.move_velocity(right_speed);
+}
 
 
+float initial_x;
+float initial_y;
+float initial_heading;
 
+// Function to get the robot's current position using encoders
+Position get_robot_position(Position current_position, bool reverse, float setpoint_heading=NULL) {
+    // Get the encoder values
+	std::vector<double> left_ticks = left_mg.get_position_all();
+	std::vector<double> right_ticks = right_mg.get_position_all();
+
+    // Calculate averages of every motor's tracked ticks
+	double left_tick_avg = 0;
+	for (auto& tick: left_ticks){
+		left_tick_avg += tick;
+	}
+	left_tick_avg /= left_ticks.size();
+
+	double right_tick_avg = 0;
+	for (auto& tick: right_ticks){
+		right_tick_avg += tick;
+	}
+	right_tick_avg /= right_ticks.size();
+
+    // int side_ticks = side_encoder.get_value();
+    pros::lcd::print(0, "Tick stuff: %f, %f", left_tick_avg, right_tick_avg);
+
+    // Calculate distances
+    float left_distance = ticks_to_feet(left_tick_avg);
+    float right_distance = ticks_to_feet(right_tick_avg);
+    // float side_distance = ticks_to_feet(side_ticks);
+
+    // Calculate the forward and lateral displacement
+    float forward_distance = (left_distance + right_distance) / 2.0;
+    float lateral_distance = 0;
+    // float lateral_distance = side_distance;
+
+    // Get the current heading from the inertial sensor
+    // float current_heading = setpoint_heading;
+    float current_heading;
+    if (setpoint_heading == NULL){
+        // current_heading = -1*(float(imu_sensor.get_heading()) - initial_heading);
+        current_heading = -1*(float(imu_sensor.get_heading()) - initial_heading);
+    } else {
+        current_heading = setpoint_heading;
+    }
+
+    // pros::lcd::print(6, "Munch: %2.f, %2.f, %2.f", current_heading, imu_sensor.get_heading(), (-1*float(imu_sensor.get_heading())));
+    // if (reverse){
+    //     current_heading += 180;
+    // }
+    if (current_heading < -180){
+        current_heading += 360;
+    } else if (current_heading > 180){
+        current_heading -= 360;
+    }
+
+    // Calculate the change in position
+    float delta_x = forward_distance * cos(current_heading * M_PI / 180.0) - lateral_distance * sin(current_heading * M_PI / 180.0);
+    float delta_y = forward_distance * sin(current_heading * M_PI / 180.0) + lateral_distance * cos(current_heading * M_PI / 180.0);
+    // pros::lcd::print(1, "DISTNACE TRAVELLED: %f", forward_distance);
+
+    // if (reverse){
+        // delta_x
+        // continue;
+    // }
+    // Update the total position
+    current_position.x += delta_x;
+    current_position.y += delta_y;
+    current_position.heading = current_heading;
+
+    // Reset encoders after reading
+    left_mg.tare_position_all();
+    right_mg.tare_position_all();
+    side_encoder.reset();
+
+    return current_position;
+}
+
+void PID_controller(){
+    pros::lcd::print(0, "PIDPIDPIDPID");
+	double dt = DT;  // Time step in seconds (25 ms)
+
+    double goal_x = 0.0;
+    double goal_y = 0.0;
+	initial_heading = route[1][4] * 180 / M_PI;
+    bool reversed = false;
+    // if (route[0][4] == 1){ // is reversed
+    //     initial_heading += 180;
+    //     // initial_heading = 180 - initial_heading;
+    //     if (initial_heading > 180){
+    //         initial_heading -= 360;
+    //     } else if (initial_heading < -180){
+    //         initial_heading += 360;
+    //     }
+    //     // reversed = true;
+    // }
+    float old_heading = initial_heading;
+    // pros::lcd::print(0, "Route size: %i", route.size());
+    Position current_position;
+    current_position.heading = 0;
+    current_position.x = route[1][2] / 12.0;
+    current_position.y = route[1][3] / 12.0;
+
+    int index = 0;  // Index to iterate over the velocity_heading vector
+
+    left_mg.tare_position_all();
+    right_mg.tare_position_all();
+    side_encoder.reset();
+    pros::lcd::print(3, "Route size: %i", route.size());
+    bool correcting_heading = false;
+    
+    bool mogo_mech_state = LOW;
+    int kill_timer = -1;
+    while (index < route.size()) { //  || x_pid.previous_error > 0.05 || y_pid.previous_error > 0.05 || heading_pid.previous_error > 2
+        if (kill_timer == 0) break;
+        if (index == 0){
+            current_position.heading = 0;
+            current_position.x = route[1][2] / 12.0;
+            if (dumb){
+                current_position.x *= -1;
+            }
+            current_position.y = route[1][3] / 12.0;
+        }
+        // Get the setpoints from the velocity_heading vector
+        while (index < route.size() && route[index][0] == 1) {
+
+            const auto& node = route[index];
+            
+            // Move intake (value is either -1, 0, or 1)
+            intake.move(127*node[1]);
+
+            // Toggle clamp state
+            if (node[2]){
+                clamp_state = !clamp_state;
+                mogo_mech.set_value(clamp_state);
+            }
+
+            lady_brown.setState(node[6]);
+
+             // Toggle reverse
+            if (route[index][4] == 1){
+                reversed = !reversed;
+            }
+
+            index++;
+        }
+        if (index == route.size()){
+            break;
+        }
+        current_position = get_robot_position(current_position, reversed);
+        // if (reversed){
+        //     current_position.heading -= 180;
+        //     if (current_position.heading < -180){
+        //         current_position.heading += 360;
+        //     }
+        // }
+        goal_x = route[index][2] / 12.0;
+        goal_y = route[index][3] / 12.0;
+        float setpoint_heading = route[index][4] * 180 / M_PI;
+        if (dumb){
+            goal_x *= -1;
+            setpoint_heading = 180 - setpoint_heading;
+            if (setpoint_heading > 180){
+                setpoint_heading -= 360;
+            } else if (setpoint_heading < -180){
+                setpoint_heading += 360;
+            }
+        }
+
+        // Center heading around 0 degrees
+        if (setpoint_heading > 180){
+            setpoint_heading -= 360;
+        } if (setpoint_heading < -180){
+            setpoint_heading += 360;
+        }
+
+        pros::lcd::print(5, "Headings: %f, %f, %f", setpoint_heading, current_position.heading, old_heading);
+        pros::lcd::print(6, "X positions: %f, %f", goal_x*12, current_position.x*12);
+        pros::lcd::print(7, "Y positions: %f, %f", goal_y*12, current_position.y*12);
+
+        // Compute the control signals for x, y, and heading
+        float x_control_signal = x_pid.compute(goal_x, current_position.x, dt);
+        float y_control_signal = y_pid.compute(goal_y, current_position.y, dt);
+
+        if (current_position.heading > 0 && current_position.heading < 90
+        ){
+            if (current_position.x - goal_x > 0){
+                x_control_signal *= 0.5;
+            } if (current_position.y - goal_y > 0){
+                y_control_signal *= 0.5;
+            }
+        } if (current_position.heading < 180 && current_position.heading > 90){
+            if (current_position.x - goal_x < 0){
+                x_control_signal *= 0.5;
+            } if (current_position.y - goal_y > 0){
+                y_control_signal *= 0.5;
+            }
+        } if (current_position.heading < -90 && current_position.heading > -180){
+            if (current_position.x - goal_x < 0){
+                x_control_signal *= 0.5;
+            } if (current_position.y - goal_y < 0){
+                y_control_signal *= 0.5;
+            }
+        } if (current_position.heading < 0 && current_position.heading > -90){
+            if (current_position.x - goal_x > 0){
+                x_control_signal *= 0.5;
+            } if (current_position.y - goal_y < 0){
+                y_control_signal *= 0.5;
+            }
+        }
+        float heading_control_signal = heading_pid.compute(setpoint_heading, current_position.heading, dt, true);
+
+        pros::lcd::print(4, "Control Signals: %f, %f, %f", x_control_signal, y_control_signal, heading_control_signal);
+       
+        // Combine x and y control signals to get the overall linear velocity
+        float linear_velocity = sqrt(pow(x_control_signal, 2) + pow(y_control_signal, 2));
+        if ((goal_x > current_position.x) && (goal_y > current_position.y)){
+            
+        }
+        if (reversed){
+            linear_velocity *= -1;
+        }
+        // Apply the control signals to the motors
+        apply_control_signal(linear_velocity, heading_control_signal);
+
+        old_heading = current_position.heading;
+
+        // Sleep for the time step duration
+        pros::delay(dt * 1000);
+
+        // Move to the next setpoint
+        index++;
+
+        kill_timer--;
+    }
+    left_mg.move_velocity(0);
+    right_mg.move_velocity(0);
+    pros::delay(1000);
+}
 
 /**
  * @brief Follow a 2D motion profile using RAMSETE and drivetrain controllers
@@ -327,6 +654,8 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
     const double START_TIME = pros::millis();
     const double DT = 25;  // 25ms fixed timestep matching motion profile
     const double track_width = 12.7; // inches
+
+    lady_brown.setState(route[0][6]);
     size_t trajectory_index = 1;
     Pose new_pos = {route[1][2], route[1][3], route[1][4]};
     odometry.setPose(new_pos);
@@ -504,6 +833,8 @@ void initialize() {
 	pros::lcd::initialize();
 	pros::lcd::set_text(1, "Hello PROS User!");
 	pros::lcd::register_btn1_cb(on_center_button);
+    lb.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+
     start_color_detection("red");
 
 
@@ -566,6 +897,7 @@ void autonomous() {
         // while (true){
         //     pros::delay(20);
         // }
+        // PID_controller();
         followTrajectory(route, odometry, ramsete, drivetrain, left_mg, right_mg);
     }
 }
@@ -602,9 +934,11 @@ void opcontrol() {
 
         if (master.get_digital(DIGITAL_R1)) {
             intake.move_velocity(200);
-        } else if (master.get_digital(DIGITAL_R2)) {
-            intake.move_velocity(-200);
-        } else {
+        }
+        //  else if (master.get_digital(DIGITAL_R2)) {
+        //     intake.move_velocity(-200);
+        // }
+         else {
             intake.move_velocity(0);
         }
 
@@ -614,11 +948,19 @@ void opcontrol() {
             master.rumble("-");
         }
 
-        if (!prev_lady_brown_state && master.get_digital(DIGITAL_L2)){
-            lady_brown_state = (lady_brown_state + 1) % 3;
-            lady_brown.setState(lady_brown_state);
+        if (master.get_digital(DIGITAL_L2)){
+            lb.move(127);
+        } else if (master.get_digital(DIGITAL_R2)){
+            lb.move(-127);
+        } else {
+            lb.move(0);
         }
-        prev_lady_brown_state = master.get_digital(DIGITAL_L2);
+
+        // if (!prev_lady_brown_state && master.get_digital(DIGITAL_L2)){
+        //     lady_brown_state = (lady_brown_state + 1) % 3;
+        //     lady_brown.setState(lady_brown_state);
+        // }
+        // prev_lady_brown_state = master.get_digital(DIGITAL_L2);
 
         // if (master.get_digital_new_press(DIGITAL_UP)){
         //     lady_brown.setState(3);

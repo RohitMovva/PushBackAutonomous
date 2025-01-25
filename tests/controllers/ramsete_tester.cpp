@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include "../../include/controllers/ramsete_controller.h"
-// #include "../../include/routes/routes.h"
+#include "../../include/routes/routes.h"
 #include <cmath>
 
 struct TestCase {
