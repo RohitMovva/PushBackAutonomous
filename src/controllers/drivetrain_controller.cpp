@@ -37,17 +37,17 @@ DrivetrainController::MotorVoltages DrivetrainController::calculateVoltages(
     if (dt <= 0) dt = 0.025;  // Default to 25ms
     
     // Convert velocities to encoder ticks/sec for consistency
-    double leftSetpointTicks = velocityToTicks(leftVelocitySetpoint);
-    double rightSetpointTicks = velocityToTicks(rightVelocitySetpoint);
-    double leftActualTicks = velocityToTicks(leftVelocityActual);
-    double rightActualTicks = velocityToTicks(rightVelocityActual);
+    // double leftSetpointTicks = velocityToTicks(leftVelocitySetpoint);
+    // double rightSetpointTicks = velocityToTicks(rightVelocitySetpoint);
+    // double leftActualTicks = velocityToTicks(leftVelocityActual);
+    // double rightActualTicks = velocityToTicks(rightVelocityActual);
     
     // Calculate errors in ticks/sec
-    double leftVelocityError = leftSetpointTicks - leftActualTicks;
-    double rightVelocityError = rightSetpointTicks - rightActualTicks;
-    
+    double leftVelocityError = leftVelocitySetpoint - leftVelocityActual;
+    double rightVelocityError = rightVelocitySetpoint - rightVelocityActual;
+
     // Update integral terms (with anti-windup)
-    const double integralLimit = 1000.0;
+    const double integralLimit = 5.0;
     leftIntegralError = std::clamp(
         leftIntegralError + leftVelocityError * dt,
         -integralLimit, integralLimit);
@@ -61,11 +61,11 @@ DrivetrainController::MotorVoltages DrivetrainController::calculateVoltages(
     
     // Calculate feedforward
     double leftFeedforward = calculateFeedforward(
-        leftSetpointTicks, 
-        velocityToTicks(leftAcceleration));
+        leftVelocitySetpoint, 
+        leftAcceleration);
     double rightFeedforward = calculateFeedforward(
-        rightSetpointTicks, 
-        velocityToTicks(rightAcceleration));
+        rightVelocitySetpoint, 
+        rightAcceleration);
     
     // Calculate feedback
     double leftFeedback = calculateFeedback(

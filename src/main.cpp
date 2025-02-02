@@ -1,23 +1,43 @@
 #include "main.h"
 #include "utilities/logger.h"
+#include "pros/rotation.hpp"
+#include "filters/slew_rate_limiter.h"
+
+class Vector2 {
+public:
+  Vector2(float x, float y): x(x), y(y) {}
+  std::string latex() const {
+    std::ostringstream oss;
+    oss << "(" << std::fixed << this->x << "," << std::fixed << this->y << ")";
+    return oss.str();
+  }
+  
+  float x;
+  float y;
+};
+
+
 
 class LadyBrown {
 private:
     std::atomic<int> target_state{0};
-    int reset_countdown = 0;
     
     // PID constants - these may need tuning
     const double kP = 1.3;
-    const double kI = 0.3;
-    const double kD = 0.7;
+    const double kI = 0.0;
+    const double kD = 0.0;
+
+    pros::Rotation rot_sensor;
+
+    bool manual_control = false;
     
     // Position setpoints in degrees (adjusted for gear ratio)
     // With 12:64 ratio, multiply desired angles by (64/12) = 5.33
-    const double STATE_POSITIONS[4] = {
+    double STATE_POSITIONS[4] = {
         0.0,
-        16.00 * (64.0/12.0),    // ~53.3 degrees at motor
+        -36.50,    // ~53.3 degrees at motor
         114.5 * (64.0/12.0),    // ~586.7 degrees at motor
-        -1.0  // Reset position
+        0.0, // Placeholder for manual control
     };
     
     // PID variables
@@ -27,6 +47,8 @@ private:
     // Helper function to calculate PID
     double calculatePID(double current_pos, double target_pos) {
         double error = target_pos - current_pos;
+        while (error > 180) error -= 360;
+        while (error < -180) error += 360;
         
         // Update integral with anti-windup
         integral = integral + error;
@@ -48,22 +70,24 @@ private:
 public:
     pros::Motor lift_motor;
 
-    LadyBrown(int motor_port, bool reverse = false) : 
-        lift_motor(motor_port) {
+    LadyBrown(int motor_port, bool reverse, pros::Rotation sensor) : 
+        lift_motor(motor_port),
+        rot_sensor(sensor) {
         // Configure motor settings
         lift_motor.set_gearing(pros::E_MOTOR_GEARSET_36); // 36:1 green cartridge
         lift_motor.set_reversed(reverse);
         lift_motor.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
         lift_motor.set_encoder_units(pros::E_MOTOR_ENCODER_DEGREES);
         lift_motor.tare_position();
+        rot_sensor.reset();
+
+
+
     }
     
     void setState(int new_state) {
         if (new_state >= 0 && new_state <= 3) {
             target_state = new_state;
-        }
-        if (new_state == 3 || new_state == 0) {
-            reset_countdown = 60;
         }
     }
     
@@ -73,38 +97,42 @@ public:
     
     // This should be run in a separate task
     void update() {
-        int cnt = 0;
-        int reset_timer = 0;
         while (true) {
-            int current_state = target_state.load();
-            if (current_state == 3)  {
-                if (reset_countdown > 0) {
-                    reset_countdown--;
-                    lift_motor.move(-127);  // Move motor down to reset position
-                } else {
-                    lift_motor.move(0);  // Stop motor
-                    prev_error = 0;
-                    integral = 0;
-                    setState(0);
-                    reset_timer = 5;
-                }
-            } else {
-                if (reset_timer > 0) {
-                    lift_motor.tare_position();
-                    reset_timer--;
-                }
-                double current_pos = lift_motor.get_position();
-                double target_pos = STATE_POSITIONS[current_state];
-                
-                double output = calculatePID(current_pos, target_pos);
-                if (reset_timer == 0){
-                    lift_motor.move(output);
-                }
+            pros::lcd::print(0, "LadyBrown Task: %d", manual_control);
+            if (manual_control) {
+                // Skip PID control if in manual mode
+                pros::delay(20);
+                continue;
             }
-            cnt++;
+            int current_state = target_state.load();
+            pros::lcd::print(1, "Current state: %d", current_state);
+            double current_pos = rot_sensor.get_position() / 100.0;
+            double target_pos = STATE_POSITIONS[current_state];
+            pros::lcd::print(2, "Current pos: %f", current_pos);
+            pros::lcd::print(3, "Target pos: %f", target_pos);
+
+            double output = calculatePID(current_pos, target_pos);
+            lift_motor.move(output);
             pros::delay(20);  // Run at 50Hz
         }
     }
+
+    pros::Motor getMotor() {
+        return lift_motor;
+    }
+
+    void setManualControl(bool manual) {
+        if (manual != manual_control) {
+            lift_motor.move_velocity(0);
+            setManualPosition();
+        }
+        manual_control = manual;
+    }
+
+    void setManualPosition() {
+        STATE_POSITIONS[3] = rot_sensor.get_position() / 100.0;
+    }
+
     
     // Helper method to start the control loop
     static void startTask(void* param) {
@@ -117,17 +145,19 @@ public:
     }
 };
 // Global Vars
+pros::Rotation lb_encoder(6); // Later/al tracking encoder (PORT MIGHT BE WRONG)
 
 // Robot config
 pros::Controller master(pros::E_CONTROLLER_MASTER);
-pros::MotorGroup left_mg({-15, -12, -18});    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
+pros::MotorGroup left_mg({-15, -10, -18});    // Creates a motor group with forwards ports 1 & 3 and reversed port 2
 pros::MotorGroup right_mg({19, 16, 11});  // Creates a motor group with forwards port 5 and reversed ports 4 & 6
-pros::MotorGroup intake({-13, 17});
-pros::Motor lb(14);
-LadyBrown lady_brown(2);  // Replace 1 with your motor port
+// Set to blue cartridges
+// left_mg.set_gearing(pros::E_MOTOR_GEARSET_36);
+pros::MotorGroup intake({-13, 4});
+LadyBrown lady_brown(7, true, lb_encoder);  // Replace 1 with your motor port
 int lady_brown_state = 0;
 
-pros::Imu imu_sensor(5);
+pros::Imu imu_sensor(9);
 
 const int GOAL_CLAMP_PORT = 1;
 const int DOINKER_PORT = 7;
@@ -158,8 +188,8 @@ std::string program_type = "autonomous";
 // std::string program_type = "calibrate_metrics";
 
 // Routes
-// std::vector<std::vector<double>> route = test; // used to be skills
-std::vector<std::vector<double>> route = {}; // Driver or Calibration
+std::vector<std::vector<double>> route = test; // used to be skills
+// std::vector<std::vector<double>> route = {}; // Driver or Calibration
 
 // Robot parameters (needs to be tweaked later)
 const float WHEEL_DIAMETER = 2.75;  // Diameter of the wheels in inches
@@ -199,7 +229,15 @@ struct Position {
     float heading;
 };
 
-bool dumb = false;
+double velocityToTicks(double velocityInchesPerSec) {
+    return (velocityInchesPerSec * TICKS_PER_ROTATION) / (WHEEL_DIAMETER * M_PI);
+}
+
+double ticksToInches(double ticks) {
+    return (ticks / TICKS_PER_ROTATION) * WHEEL_DIAMETER * M_PI * GEAR_RATIO;
+}
+
+
 
 class PIDController {
 public:
@@ -372,262 +410,6 @@ void start_color_detection(const char* color) {
     pros::Task color_detection_task(color_piston_control, (void*)color_param, "Color Detection");
 }
 
-void apply_control_signal(float linear_velocity, float angular_velocity) {
-    float left_speed = ft_per_sec_to_rpm(linear_velocity - angular_velocity);
-    float right_speed = ft_per_sec_to_rpm(linear_velocity + angular_velocity);
-    // Don't think we need this stuff anymore hopefully, I'll keep it for now just in case
-    // float maxVal = std::max(left_speed, right_speed);
-    // if (maxVal > 200){
-    //     left_speed *= (200/maxVal);
-    //     right_speed *= (200/maxVal);
-    // }
-    // pros::lcd::print(1, "Left velocity: %2.f", left_speed);
-    pros::lcd::print(2, "Right velocity: %2.f", right_speed);
-    left_mg.move_velocity(left_speed);
-    right_mg.move_velocity(right_speed);
-}
-
-
-float initial_x;
-float initial_y;
-float initial_heading;
-
-// Function to get the robot's current position using encoders
-Position get_robot_position(Position current_position, bool reverse, float setpoint_heading=NULL) {
-    // Get the encoder values
-	std::vector<double> left_ticks = left_mg.get_position_all();
-	std::vector<double> right_ticks = right_mg.get_position_all();
-
-    // Calculate averages of every motor's tracked ticks
-	double left_tick_avg = 0;
-	for (auto& tick: left_ticks){
-		left_tick_avg += tick;
-	}
-	left_tick_avg /= left_ticks.size();
-
-	double right_tick_avg = 0;
-	for (auto& tick: right_ticks){
-		right_tick_avg += tick;
-	}
-	right_tick_avg /= right_ticks.size();
-
-    // int side_ticks = side_encoder.get_value();
-    pros::lcd::print(0, "Tick stuff: %f, %f", left_tick_avg, right_tick_avg);
-
-    // Calculate distances
-    float left_distance = ticks_to_feet(left_tick_avg);
-    float right_distance = ticks_to_feet(right_tick_avg);
-    // float side_distance = ticks_to_feet(side_ticks);
-
-    // Calculate the forward and lateral displacement
-    float forward_distance = (left_distance + right_distance) / 2.0;
-    float lateral_distance = 0;
-    // float lateral_distance = side_distance;
-
-    // Get the current heading from the inertial sensor
-    // float current_heading = setpoint_heading;
-    float current_heading;
-    if (setpoint_heading == NULL){
-        // current_heading = -1*(float(imu_sensor.get_heading()) - initial_heading);
-        current_heading = -1*(float(imu_sensor.get_heading()) - initial_heading);
-    } else {
-        current_heading = setpoint_heading;
-    }
-
-    // pros::lcd::print(6, "Munch: %2.f, %2.f, %2.f", current_heading, imu_sensor.get_heading(), (-1*float(imu_sensor.get_heading())));
-    // if (reverse){
-    //     current_heading += 180;
-    // }
-    if (current_heading < -180){
-        current_heading += 360;
-    } else if (current_heading > 180){
-        current_heading -= 360;
-    }
-
-    // Calculate the change in position
-    float delta_x = forward_distance * cos(current_heading * M_PI / 180.0) - lateral_distance * sin(current_heading * M_PI / 180.0);
-    float delta_y = forward_distance * sin(current_heading * M_PI / 180.0) + lateral_distance * cos(current_heading * M_PI / 180.0);
-    // pros::lcd::print(1, "DISTNACE TRAVELLED: %f", forward_distance);
-
-    // if (reverse){
-        // delta_x
-        // continue;
-    // }
-    // Update the total position
-    current_position.x += delta_x;
-    current_position.y += delta_y;
-    current_position.heading = current_heading;
-
-    // Reset encoders after reading
-    left_mg.tare_position_all();
-    right_mg.tare_position_all();
-    side_encoder.reset();
-
-    return current_position;
-}
-
-void PID_controller(){
-    pros::lcd::print(0, "PIDPIDPIDPID");
-	double dt = DT;  // Time step in seconds (25 ms)
-
-    double goal_x = 0.0;
-    double goal_y = 0.0;
-	initial_heading = route[1][4] * 180 / M_PI;
-    bool reversed = false;
-    // if (route[0][4] == 1){ // is reversed
-    //     initial_heading += 180;
-    //     // initial_heading = 180 - initial_heading;
-    //     if (initial_heading > 180){
-    //         initial_heading -= 360;
-    //     } else if (initial_heading < -180){
-    //         initial_heading += 360;
-    //     }
-    //     // reversed = true;
-    // }
-    float old_heading = initial_heading;
-    // pros::lcd::print(0, "Route size: %i", route.size());
-    Position current_position;
-    current_position.heading = 0;
-    current_position.x = route[1][2] / 12.0;
-    current_position.y = route[1][3] / 12.0;
-
-    int index = 0;  // Index to iterate over the velocity_heading vector
-
-    left_mg.tare_position_all();
-    right_mg.tare_position_all();
-    side_encoder.reset();
-    pros::lcd::print(3, "Route size: %i", route.size());
-    bool correcting_heading = false;
-    
-    bool mogo_mech_state = LOW;
-    int kill_timer = -1;
-    while (index < route.size()) { //  || x_pid.previous_error > 0.05 || y_pid.previous_error > 0.05 || heading_pid.previous_error > 2
-        if (kill_timer == 0) break;
-        if (index == 0){
-            current_position.heading = 0;
-            current_position.x = route[1][2] / 12.0;
-            if (dumb){
-                current_position.x *= -1;
-            }
-            current_position.y = route[1][3] / 12.0;
-        }
-        // Get the setpoints from the velocity_heading vector
-        while (index < route.size() && route[index][0] == 1) {
-
-            const auto& node = route[index];
-            
-            // Move intake (value is either -1, 0, or 1)
-            intake.move(127*node[1]);
-
-            // Toggle clamp state
-            if (node[2]){
-                clamp_state = !clamp_state;
-                mogo_mech.set_value(clamp_state);
-            }
-
-            lady_brown.setState(node[6]);
-
-             // Toggle reverse
-            if (route[index][4] == 1){
-                reversed = !reversed;
-            }
-
-            index++;
-        }
-        if (index == route.size()){
-            break;
-        }
-        current_position = get_robot_position(current_position, reversed);
-        // if (reversed){
-        //     current_position.heading -= 180;
-        //     if (current_position.heading < -180){
-        //         current_position.heading += 360;
-        //     }
-        // }
-        goal_x = route[index][2] / 12.0;
-        goal_y = route[index][3] / 12.0;
-        float setpoint_heading = route[index][4] * 180 / M_PI;
-        if (dumb){
-            goal_x *= -1;
-            setpoint_heading = 180 - setpoint_heading;
-            if (setpoint_heading > 180){
-                setpoint_heading -= 360;
-            } else if (setpoint_heading < -180){
-                setpoint_heading += 360;
-            }
-        }
-
-        // Center heading around 0 degrees
-        if (setpoint_heading > 180){
-            setpoint_heading -= 360;
-        } if (setpoint_heading < -180){
-            setpoint_heading += 360;
-        }
-
-        pros::lcd::print(5, "Headings: %f, %f, %f", setpoint_heading, current_position.heading, old_heading);
-        pros::lcd::print(6, "X positions: %f, %f", goal_x*12, current_position.x*12);
-        pros::lcd::print(7, "Y positions: %f, %f", goal_y*12, current_position.y*12);
-
-        // Compute the control signals for x, y, and heading
-        float x_control_signal = x_pid.compute(goal_x, current_position.x, dt);
-        float y_control_signal = y_pid.compute(goal_y, current_position.y, dt);
-
-        if (current_position.heading > 0 && current_position.heading < 90
-        ){
-            if (current_position.x - goal_x > 0){
-                x_control_signal *= 0.5;
-            } if (current_position.y - goal_y > 0){
-                y_control_signal *= 0.5;
-            }
-        } if (current_position.heading < 180 && current_position.heading > 90){
-            if (current_position.x - goal_x < 0){
-                x_control_signal *= 0.5;
-            } if (current_position.y - goal_y > 0){
-                y_control_signal *= 0.5;
-            }
-        } if (current_position.heading < -90 && current_position.heading > -180){
-            if (current_position.x - goal_x < 0){
-                x_control_signal *= 0.5;
-            } if (current_position.y - goal_y < 0){
-                y_control_signal *= 0.5;
-            }
-        } if (current_position.heading < 0 && current_position.heading > -90){
-            if (current_position.x - goal_x > 0){
-                x_control_signal *= 0.5;
-            } if (current_position.y - goal_y < 0){
-                y_control_signal *= 0.5;
-            }
-        }
-        float heading_control_signal = heading_pid.compute(setpoint_heading, current_position.heading, dt, true);
-
-        pros::lcd::print(4, "Control Signals: %f, %f, %f", x_control_signal, y_control_signal, heading_control_signal);
-       
-        // Combine x and y control signals to get the overall linear velocity
-        float linear_velocity = sqrt(pow(x_control_signal, 2) + pow(y_control_signal, 2));
-        if ((goal_x > current_position.x) && (goal_y > current_position.y)){
-            
-        }
-        if (reversed){
-            linear_velocity *= -1;
-        }
-        // Apply the control signals to the motors
-        apply_control_signal(linear_velocity, heading_control_signal);
-
-        old_heading = current_position.heading;
-
-        // Sleep for the time step duration
-        pros::delay(dt * 1000);
-
-        // Move to the next setpoint
-        index++;
-
-        kill_timer--;
-    }
-    left_mg.move_velocity(0);
-    right_mg.move_velocity(0);
-    pros::delay(1000);
-}
-
 /**
  * @brief Follow a 2D motion profile using RAMSETE and drivetrain controllers
  * 
@@ -649,7 +431,9 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
                      int timeout = 1e9) { // Not using timeout for now
     
     if (route.empty()) return false;
+    logger->log("Following trajectory");
     std::cout << "Following trajectory" << std::endl;
+    // left_mg.getveloc
     
     const double START_TIME = pros::millis();
     const double DT = 25;  // 25ms fixed timestep matching motion profile
@@ -660,20 +444,26 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
     Pose new_pos = {route[1][2], route[1][3], route[1][4]};
     odometry.setPose(new_pos);
 
-    
+    logger->log("Initial pose: %f %f %f", new_pos.x, new_pos.y, new_pos.theta);
     // Main control loop
+    logger->log("Route size: %d", route.size());
     while (trajectory_index < route.size()) {
+        // logger->log("Trajectory index: %d", trajectory_index);
         odometry.update();
+        // logger->log("Odom Updated");
         const double current_time = pros::millis() - START_TIME;
         
         // Timeout check
         if (current_time > timeout) {
             return false;
         }
+        // logger->log("Current time: %f", current_time);
         
         // Get current state from odometry
         Pose current_pose = odometry.getPose();
+        // logger->log("Got pose");
         auto velocities = odometry.getFilteredVelocities();
+        // logger->log("Velocities: %f %f", velocities.first, velocities.second);
         
         // Check if the current waypoint is a node instead of a trajectory point
         while (trajectory_index < route.size() && route[trajectory_index][0] == 1) {
@@ -766,8 +556,8 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
         
         // Convert RAMSETE output to wheel velocities
         auto wheel_velocities = ramsete.calculate_wheel_velocities(
-            ramsete_output[0], // linear velocity
-            ramsete_output[1], // angular velocity
+            goal_v, // linear velocity
+            goal_w, // angular velocity
             2.75,             // wheel diameter (inches)
             48.0/36.0,         // gear ratio
             track_width       // track width (inches)
@@ -807,6 +597,124 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
     return true;
 }
 
+void collect_velocity_vs_voltage_data() {
+    logger->log("Collecting velocity vs voltage data");
+    std::vector<float> inputs = {0.f, 10.f, 20.f, 30.f, 40.f, 50.f, 60.f, 70.f, 80.f, 90.f, 100.f, 110.f, 120.f, 127.f};
+    std::vector<float> outputs = {0.f};
+    outputs.reserve(inputs.size());
+
+    float direction = 1;
+    for (auto & input: inputs) {
+            if (input == 0)
+                    continue;
+            
+            // chassis.drive_with_voltage(direction * input, direction * input);
+            left_mg.move(direction * input);
+            right_mg.move(direction * input);
+            
+            // Sleep for 1000 ms
+            pros::delay(1000);
+
+            int n;
+            float v_sum = 0;
+            for (n = 0; n < 10; ++n){
+                // Get position delta of the motors
+                left_mg.tare_position_all();
+                right_mg.tare_position_all();
+                pros::delay(10);
+                std::vector<double> left_delta_velocity_ticks = left_mg.get_position_all();
+                std::vector<double> right_delta_velocity_ticks = right_mg.get_position_all();
+
+                // Calculate the average velocity of the motors
+                double left_delta_velocity = (left_delta_velocity_ticks[0] + left_delta_velocity_ticks[1] + left_delta_velocity_ticks[2]) / 3.0;
+                double right_delta_velocity = (right_delta_velocity_ticks[0] + right_delta_velocity_ticks[1] + right_delta_velocity_ticks[2]) / 3.0;
+
+                // Convert velocities from delta ticks to delta inches
+                left_delta_velocity = ticksToInches(left_delta_velocity);
+                right_delta_velocity = ticksToInches(right_delta_velocity);
+
+                // Scale velocities by dt
+                double left_velocity = left_delta_velocity / 0.01;
+                double right_velocity = right_delta_velocity / 0.01;
+
+                v_sum += (left_velocity + right_velocity) / 2.0;
+
+                logger->log("Left velocity: %f, Right velocity: %f", left_velocity, right_velocity);
+            }
+            outputs.emplace_back(direction * (v_sum / (float) n));
+            auto v = input * direction;
+            while (fabsf(v) > 0.3) {
+                    v *= 0.9;
+                    left_mg.move_voltage(v);
+                    right_mg.move_voltage(v);
+                    pros::delay(10);
+            }
+            direction = -direction;
+    }
+
+    left_mg.move_voltage(0);
+    right_mg.move_voltage(0);
+
+    for (int i = 0; i < inputs.size(); ++i) {
+            std::cout << Vector2(inputs[i], outputs[i]).latex() << ",";
+            logger->log(Vector2(inputs[i], outputs[i]).latex().c_str());
+    }
+    std::cout << "\b" << std::endl;
+    logger->log("Data collection complete");
+}
+
+void collect_velocity_vs_constant_voltage_data() {
+    logger->log("Collecting velocity vs constant voltage data");
+    float input = 58.2062493625;
+    SlewRateLimiter slew_limiter(200.0, 200.0);
+    std::vector<float> outputs = {0.f};
+
+    float direction = 1;
+    for (int i = 0; i < 250; ++i) {
+            if (input == 0)
+                    continue;
+            
+            left_mg.move(direction * input);
+            right_mg.move(direction * input);
+            
+            float v_act = 0;
+
+            std::vector<double> left_delta_velocity_ticks = left_mg.get_position_all();
+            std::vector<double> right_delta_velocity_ticks = right_mg.get_position_all();
+
+            // Calculate the average velocity of the motors
+            double left_delta_velocity = (left_delta_velocity_ticks[0] + left_delta_velocity_ticks[1] + left_delta_velocity_ticks[2]) / 3.0;
+            double right_delta_velocity = (right_delta_velocity_ticks[0] + right_delta_velocity_ticks[1] + right_delta_velocity_ticks[2]) / 3.0;
+
+            // Convert velocities from delta ticks to delta inches
+            left_delta_velocity = ticksToInches(left_delta_velocity);
+            right_delta_velocity = ticksToInches(right_delta_velocity);
+
+            // Scale velocities by dt
+            double left_velocity = left_delta_velocity / 0.01;
+            double right_velocity = right_delta_velocity / 0.01;
+
+            v_act = (left_velocity + right_velocity) / 2.0;
+            v_act = slew_limiter.calculate(v_act, 0.01);
+
+            // outputs.emplace_back(velocityToTicks(direction * (v_act)));
+            outputs.emplace_back(direction * (v_act));
+            left_mg.tare_position_all();
+            right_mg.tare_position_all();
+            pros::delay(10);
+    }
+
+    left_mg.move_voltage(0);
+    right_mg.move_voltage(0);
+
+    for (int i = 0; i < outputs.size(); ++i) {
+            std::cout << Vector2(10*i, outputs[i]).latex() << ",";
+            logger->log(Vector2((10*i)/1000.0, outputs[i]).latex().c_str());
+    }
+    std::cout << "\b" << std::endl;
+    logger->log("Data collection complete");
+}
+
 /**
  * A callback function for LLEMU's center button.
  *
@@ -833,7 +741,7 @@ void initialize() {
 	pros::lcd::initialize();
 	pros::lcd::set_text(1, "Hello PROS User!");
 	pros::lcd::register_btn1_cb(on_center_button);
-    lb.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+    // lb.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
 
     start_color_detection("red");
 
@@ -848,6 +756,8 @@ void initialize() {
 
 	// Calibrate the inertial sensor
     imu_sensor.reset();
+
+    lb_encoder.reset();
 
 	// autonomous() // For outside of competition testing purposes
     logger->log("Robot initialized");
@@ -886,10 +796,14 @@ void competition_initialize() {
  * from where it left off.
  */
 void autonomous() {
+    logger->log("Program type: %s", program_type.c_str());
 	if (program_type == "autonomous"){
         Odometry odometry(left_mg, right_mg, side_encoder, imu_sensor, WHEEL_BASE_WIDTH, 0.0, false, true, false);
         RamseteController ramsete(2.0, 0.7, 4.0*12, 5.0, 0.0254000508);
-        DrivetrainController drivetrain(15.25, 0.047, 0.0095, 0.1, 0.00, 0.0); // 
+        // DrivetrainController drivetrain(6.45734320655, 1.67811141649, 0.266620951361, 3.64408225075, 0.00, 0.0); // 
+        DrivetrainController drivetrain(6.45734320655, 1.67811141649, 0.266620951361, 3.64408225075, 0.00, 0.0); // 
+        logger->log("Starting autonomous");
+
         // 003
         // std::vector<double> velos =  drivetrain.calculateVoltages(5, 5, 0, 0, 0, 0);
         // left_mg.move_velocity();
@@ -899,6 +813,8 @@ void autonomous() {
         // }
         // PID_controller();
         followTrajectory(route, odometry, ramsete, drivetrain, left_mg, right_mg);
+        // collect_velocity_vs_voltage_data();
+        // collect_velocity_vs_constant_voltage_data();
     }
 }
 
@@ -924,7 +840,9 @@ int joystickCurve(int x, double a=2.5){
 void opcontrol() {
     bool prev_lady_brown_state = false;
     printf("Starting opcontrol\n");
-
+    lady_brown.setState(3); // Set to manual control
+    bool manual_control = false;
+    pros::Motor lb = lady_brown.getMotor();
 	while (true) {
 		// Arcade control scheme
 		int dir = (master.get_analog(ANALOG_LEFT_Y));    // Gets amount forward/backward from left joystick
@@ -935,9 +853,9 @@ void opcontrol() {
         if (master.get_digital(DIGITAL_R1)) {
             intake.move_velocity(200);
         }
-        //  else if (master.get_digital(DIGITAL_R2)) {
-        //     intake.move_velocity(-200);
-        // }
+         else if (master.get_digital(DIGITAL_X)) {
+            intake.move_velocity(-200);
+        }
          else {
             intake.move_velocity(0);
         }
@@ -948,12 +866,26 @@ void opcontrol() {
             master.rumble("-");
         }
 
+
         if (master.get_digital(DIGITAL_L2)){
+
+            lady_brown.setState(3); // Set to manual control
             lb.move(127);
+            lady_brown.setManualPosition();
+            lady_brown.setManualControl(true);
         } else if (master.get_digital(DIGITAL_R2)){
+            lady_brown.setState(3); // Set to manual control
             lb.move(-127);
+            lady_brown.setManualPosition();
+            lady_brown.setManualControl(true);
         } else {
-            lb.move(0);
+            // lb.move(0);
+            // lady_brown.setManualPosition();
+            lady_brown.setManualControl(false);
+        }
+
+        if (master.get_digital_new_press(DIGITAL_A)){
+            lady_brown.setState(1);
         }
 
         // if (!prev_lady_brown_state && master.get_digital(DIGITAL_L2)){

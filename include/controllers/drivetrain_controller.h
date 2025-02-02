@@ -88,7 +88,6 @@ private:
 
     // Robot constants
     static constexpr double WHEEL_DIAMETER = 2.75;        ///< Wheel diameter (inches)
-    static constexpr double GEAR_RATIO = 48.0/36.0;      ///< Gear ratio (input/output)
     static constexpr double MAX_RPM = 450.0;             ///< Maximum output RPM
     static constexpr double TICKS_PER_REV = 300.0;       ///< Encoder ticks per revolution
     static constexpr double PI = 3.14159;                ///< Mathematical constant π

@@ -5,7 +5,7 @@
 #include "pros/adi.hpp"
 #include "filters/kalman_2d.h"
 #include "filters/heading_filter.h"
-#include "filters/exponential_filter.h"
+#include "filters/slew_rate_limiter.h"
 #include <cmath>
 #include <vector>
 #include <string>
@@ -60,8 +60,10 @@ private:
     
     // Filters
     Kalman2D positionFilter;
-    ExponentialFilter leftVelocityFilter;
-    ExponentialFilter rightVelocityFilter;
+    // ExponentialFilter leftVelocityFilter;
+    // ExponentialFilter rightVelocityFilter;
+    SlewRateLimiter leftVelocityLimiter;
+    SlewRateLimiter rightVelocityLimiter;
     HeadingFilter headingFilter;
 
     // Filter toggles

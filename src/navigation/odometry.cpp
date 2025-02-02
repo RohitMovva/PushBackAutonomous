@@ -46,8 +46,8 @@ Odometry::Odometry(pros::MotorGroup& left, pros::MotorGroup& right,
     , rightDrive(right)
     , lateralEncoder(lateral)
     , imu(imuSensor)
-    , leftVelocityFilter(0.3)
-    , rightVelocityFilter(0.3)
+    , leftVelocityLimiter(75, 75)
+    , rightVelocityLimiter(75, 75)
     , headingFilter() // 0.8
     , useHeadingFilter(enable_heading_filter)
     , useVelocityFilters(enable_velocity_filters)
@@ -126,8 +126,8 @@ void Odometry::reset() {
     prevLateralPos = 0;
     prevTime = lastUpdateTime;
     
-    leftVelocityFilter.reset();
-    rightVelocityFilter.reset();
+    leftVelocityLimiter.reset(0);
+    rightVelocityLimiter.reset(0);
     headingFilter.reset();
     
     leftDrive.tare_position_all();
@@ -189,8 +189,9 @@ void Odometry::update() {
     double deltaLateral = lateralPos - prevLateralPos;
     // Update velocities with optional filtering
     if (useVelocityFilters) {
-        leftVelocity.linear = leftVelocityFilter.update(deltaLeft / deltaTime);
-        rightVelocity.linear = rightVelocityFilter.update(deltaRight / deltaTime);
+        leftVelocity.linear = leftVelocityLimiter.calculate(deltaLeft / deltaTime, deltaTime);
+        rightVelocity.linear = rightVelocityLimiter.calculate(deltaRight / deltaTime, deltaTime);
+
     } else {
         leftVelocity.linear = deltaLeft / deltaTime;
         rightVelocity.linear = deltaRight / deltaTime;
@@ -334,9 +335,9 @@ double Odometry::getHeadingUncertainty() const {
 
 void Odometry::disableSensor(const std::string& sensor) {
     if (sensor == "left") {
-        leftVelocityFilter.reset();
+        leftVelocityLimiter.reset();
     } else if (sensor == "right") {
-        rightVelocityFilter.reset();
+        rightVelocityLimiter.reset();
     } else if (sensor == "lateral") {
         // Reset lateral tracking
         prevLateralPos = lateralEncoder.get_position();
@@ -362,8 +363,8 @@ Odometry::DebugInfo Odometry::getDebugInfo() {
     return {
         leftVelocity.linear,
         rightVelocity.linear,
-        leftVelocityFilter.update(leftVelocity.linear),
-        rightVelocityFilter.update(rightVelocity.linear),
+        leftVelocityLimiter.calculate(leftVelocity.linear, 0.025),
+        rightVelocityLimiter.calculate(rightVelocity.linear, 0.025),
         degreesToRadians(imu.get_heading()*-1),
         currentPose.theta,
         positionFilter.getState(),

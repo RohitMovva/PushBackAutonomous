@@ -20,7 +20,7 @@ def parse_data(filename):
     with open(filename, 'r') as file:
         for line in file:
             # Extract timestamp and velocities
-            vel_match = re.match(r'\[(\d+:\d+:\d+\.\d+)\] Left wheel velocities: ([-\d.]+) ([-\d.]+)', line)
+            vel_match = re.match(r'\[(\d+:\d+:\d+\.\d+)\] Right wheel velocities: ([-\d.]+) ([-\d.]+)', line)
             volt_match = re.match(r'\[(\d+:\d+:\d+\.\d+)\] Voltages: ([-\d.]+) ([-\d.]+)', line)
             
             if vel_match:
