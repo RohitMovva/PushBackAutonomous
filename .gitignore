@@ -19,6 +19,11 @@ temp.errors
 # Logs
 *.log
 logs/
+robot_log_19700101000000.txt
 
 # Velocity files
 velocity_graphs/
+
+# route files
+routes.h
+
