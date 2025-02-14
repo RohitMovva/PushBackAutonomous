@@ -1,5 +1,4 @@
 #include "controllers/ramsete_controller.h"
-#include "api.h"
 
 RamseteController::RamseteController()
     : b_(2.0)
@@ -99,7 +98,6 @@ std::vector<double> RamseteController::calculate(double x, double y, double thet
                                                double goal_x, double goal_y, double goal_theta,
                                                double v_ref, double w_ref) {
 
-    // std::cout << "Recieved w ref: " << w_ref << "\n";
     // Scale inputs to meters
     x *= scale_factor_;
     y *= scale_factor_;

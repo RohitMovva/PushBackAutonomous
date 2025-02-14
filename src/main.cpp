@@ -35,8 +35,8 @@ private:
     // With 12:64 ratio, multiply desired angles by (64/12) = 5.33
     double STATE_POSITIONS[4] = {
         0.0,
-        -36.50,    // ~53.3 degrees at motor
-        114.5 * (64.0/12.0),    // ~586.7 degrees at motor
+        -36.5,    // ~53.3 degrees at motor
+        -190.5,    // ~586.7 degrees at motor
         0.0, // Placeholder for manual control
     };
     
@@ -49,6 +49,14 @@ private:
         double error = target_pos - current_pos;
         while (error > 180) error -= 360;
         while (error < -180) error += 360;
+
+        double cp = current_pos;
+        // while (cp > 180) cp -= 360;
+        // while (cp < -180) cp += 360;
+
+        if (cp > 0 && cp < 180 && abs(error) > 100.0){
+            error += 360.0;
+        }
         
         // Update integral with anti-windup
         integral = integral + error;
@@ -98,18 +106,18 @@ public:
     // This should be run in a separate task
     void update() {
         while (true) {
-            pros::lcd::print(0, "LadyBrown Task: %d", manual_control);
+            // pros::lcd::print(0, "LadyBrown Task: %d", manual_control);
             if (manual_control) {
                 // Skip PID control if in manual mode
                 pros::delay(20);
                 continue;
             }
             int current_state = target_state.load();
-            pros::lcd::print(1, "Current state: %d", current_state);
+            // pros::lcd::print(1, "Current state: %d", current_state);
             double current_pos = rot_sensor.get_position() / 100.0;
             double target_pos = STATE_POSITIONS[current_state];
-            pros::lcd::print(2, "Current pos: %f", current_pos);
-            pros::lcd::print(3, "Target pos: %f", target_pos);
+            // pros::lcd::print(2, "Current pos: %f", current_pos);
+            // pros::lcd::print(3, "Target pos: %f", target_pos);
 
             double output = calculatePID(current_pos, target_pos);
             lift_motor.move(output);
@@ -153,21 +161,26 @@ pros::MotorGroup left_mg({-15, -10, -18});    // Creates a motor group with forw
 pros::MotorGroup right_mg({19, 16, 11});  // Creates a motor group with forwards port 5 and reversed ports 4 & 6
 // Set to blue cartridges
 // left_mg.set_gearing(pros::E_MOTOR_GEARSET_36);
+pros::Motor lower_intake(-13);
+pros::Motor upper_intake(4);
 pros::MotorGroup intake({-13, 4});
-LadyBrown lady_brown(7, true, lb_encoder);  // Replace 1 with your motor port
+LadyBrown lady_brown(17, true, lb_encoder);  // Replace 1 with your motor port
 int lady_brown_state = 0;
-
+// right arrow is 0
+// down is activated
 pros::Imu imu_sensor(9);
 
 const int GOAL_CLAMP_PORT = 1;
-const int DOINKER_PORT = 7;
+const int DOINKER_PORT = 2;
 const int INTAKE_LIFT_PORT = 6;
-const int COLOR_SORT_PORT = 5;
+const int OPTICAL_SENSOR_PORT = 1;
+// const int OPTICAL = 5;
 
 EnhancedDigitalOut mogo_mech (GOAL_CLAMP_PORT, LOW);
 EnhancedDigitalOut doinker (DOINKER_PORT, LOW);
 EnhancedDigitalOut intake_lift (INTAKE_LIFT_PORT, LOW);
-EnhancedDigitalOut color_sort (COLOR_SORT_PORT, LOW);
+// pros::Optical optical_sensor(OPTICAL_SENSOR_PORT);
+// EnhancedDigitalOut color_sort (COLOR_SORT_PORT, LOW);
 pros::Vision vision_sensor(2);
 
 bool clamp_state = LOW;
@@ -175,6 +188,7 @@ bool doinker_state = LOW;
 bool color_sort_state = LOW;
 bool intake_lift_state = LOW;
 float prev_heading;
+
 
 Logger* logger = Logger::getInstance();
 
@@ -188,7 +202,7 @@ std::string program_type = "autonomous";
 // std::string program_type = "calibrate_metrics";
 
 // Routes
-std::vector<std::vector<double>> route = test; // used to be skills
+std::vector<std::vector<double>> route = temp; // used to be skills
 // std::vector<std::vector<double>> route = {}; // Driver or Calibration
 
 // Robot parameters (needs to be tweaked later)
@@ -247,12 +261,18 @@ public:
     float compute(float setpoint, float current_value, float dt, bool headingCentered=false) {
         float error = setpoint - current_value;
         if (headingCentered){
+
             if (error < -180.0){
                 error += 360.0;
-            } else if (error > 180.0){
+            }
+            if (error > 180.0){
                 error -= 360.0;
             }
         }
+        if (current_value < 180.0){
+            error -= 360.0;
+        }
+        // if (error > )
         integral += error * dt;
         if (integral > 5){ // Anti integral wind up, may need tweaking
             integral = 0;
@@ -291,124 +311,145 @@ float ft_per_sec_to_rpm(float velocity_ft_per_sec) {
     return (velocity_ft_per_sec * 60.0) / wheel_circumference_ft;
 }
 
-// Structure to hold color signature information
-struct ColorInfo {
-    int32_t red_sig;   // Signature ID for red objects
-    int32_t blue_sig;  // Signature ID for blue objects
-    pros::vision_signature_s_t* red_sig_ptr;
-    pros::vision_signature_s_t* blue_sig_ptr;
-};
+// void color_motor_control(const char* target_color, ColorDetectionManager* manager);
+class ColorDetectionManager;
 
-// Function to check color and control piston
-void color_piston_control(void* param) {
-    const char* target_color = (const char*)param;
-    
-    // Initialize devices
-    
-    // Initialize color signatures (you need to configure these using Vision Utility)
-    pros::vision_signature_s_t RED_SIG =
-        pros::Vision::signature_from_utility(1, 8000, 10000, 9000, -1000, 1000, 0, 3.000, 0);
-    pros::vision_signature_s_t BLUE_SIG =
-        pros::Vision::signature_from_utility(2, -3000, -1000, -2000, 3000, 5000, 4000, 3.000, 0);
-    
-    ColorInfo colors = {1, 2, &RED_SIG, &BLUE_SIG};
-    
-    while (true) {
-        // Determine which signature to look for
-        int32_t sig_id = (strcmp(target_color, "red") == 0) ? colors.red_sig : colors.blue_sig;
-        pros::vision_signature_s_t* sig_ptr = 
-            (strcmp(target_color, "red") == 0) ? colors.red_sig_ptr : colors.blue_sig_ptr;
-        
-        // Configure vision sensor with the appropriate signature
-        vision_sensor.set_signature(sig_id, sig_ptr);
-        
-        // Get the largest object of the specified color
-        pros::vision_object_s_t detected_obj = 
-            vision_sensor.get_by_sig(0, sig_id);
-        
-        // Check if object is detected and meets size threshold
-        if (detected_obj.signature == sig_id && detected_obj.width > 10) {
-            // Wait for 250ms to ensure stable detection
-            pros::delay(250);
-            
-            // Fire piston
-            color_sort_state = HIGH;
-            intake_lift.set_value(color_sort_state);
-            
-            // Hold for 500ms
-            pros::delay(500);
-            
-            // Retract piston
-            color_sort_state = LOW;
-            intake_lift.set_value(color_sort_state);
-        }
-        
-        // Add a small delay to prevent CPU hogging
-        pros::delay(20);
-    }
-}
+// Move the function declaration before the class
+void color_motor_control(const char* target_color, ColorDetectionManager* manager);
+
+// Modified struct to remove vision sensor specific elements
+struct ColorInfo {
+    int32_t red_hue_min;    // Minimum hue value for red detection
+    int32_t red_hue_max;    // Maximum hue value for red detection
+    int32_t blue_hue_min;   // Minimum hue value for blue detection
+    int32_t blue_hue_max;   // Maximum hue value for blue detection
+    double_t saturation_threshold; // Minimum saturation for valid color detection
+};
 
 class ColorDetectionManager {
-private:
-    pros::Task* detection_task = nullptr;
-    const char* current_color = nullptr;
-
-public:
-    // Constructor
-    ColorDetectionManager() = default;
+    private:
+        pros::Task* detection_task = nullptr;
+        const char* current_color = nullptr;
+        std::atomic<bool> color_sorting_{false}; // Use atomic for thread safety
     
-    // Start detection with specified color
-    void start(const char* color) {
-        // If task is already running, stop it
-        if (detection_task != nullptr) {
+    public:
+        // Add getter for color_sorting state
+        bool color_sorting() const {
+            return color_sorting_.load();
+        }
+
+        void set_color_sorting(bool state) {
+            color_sorting_.store(state);
+        }
+        
+        ColorDetectionManager() = default;
+        
+        void start(const char* color) {
+            if (detection_task != nullptr) {
+                stop();
+            }
+            
+            current_color = color;
+            
+            // Create a struct to pass both color and class pointer to task
+            struct TaskParams {
+                const char* color;
+                ColorDetectionManager* manager;
+            };
+            
+            auto* params = new TaskParams{color, this};
+            
+            // Modified task creation to use new parameter struct
+            detection_task = new pros::Task(
+                [](void* param) {
+                    auto* params = static_cast<TaskParams*>(param);
+                    color_motor_control(params->color, params->manager);
+                    delete params; // Clean up parameters when task ends
+                },
+                params,
+                "Color Detection"
+            );
+        }
+        
+        void stop() {
+            if (detection_task != nullptr) {
+                detection_task->remove();
+                delete detection_task;
+                detection_task = nullptr;
+                color_sorting_ = false; // Reset sorting state when stopped
+            }
+        }
+        
+        bool is_running() {
+            return detection_task != nullptr;
+        }
+        
+        ~ColorDetectionManager() {
             stop();
         }
-        
-        // Allocate new color parameter
-        current_color = color;
-        
-        // Create new task
-        detection_task = new pros::Task(color_piston_control, 
-                                      (void*)current_color, 
-                                      "Color Detection");
-    }
+    };
     
-    // Stop the detection task
-    void stop() {
-        if (detection_task != nullptr) {
-            detection_task->remove();
-            delete detection_task;
-            detection_task = nullptr;
+// Modified control function to update color_sorting state
+void color_motor_control(const char* target_color, ColorDetectionManager* manager) {
+    // Initialize devices
+    pros::Optical optical_sensor(OPTICAL_SENSOR_PORT);
+    
+    ColorInfo colors = {
+        355, 25,   // Red hue range
+        200, 240,  // Blue hue range
+        0.5         // Minimum saturation threshold
+    };
+
+    int i = 0;
+    
+    while (true) {
+        i++;
+        optical_sensor.set_led_pwm(100);
+        
+        double hue = optical_sensor.get_hue();
+        pros::lcd::print(0, "Hue: %f", hue);
+        double saturation = optical_sensor.get_saturation();
+        pros::lcd::print(1, "Saturation: %f", saturation);
+        pros::lcd::print(2, "i: %d", i);
+        
+        bool color_detected = false;
+        
+        if (saturation > colors.saturation_threshold) {
+            if (strcmp(target_color, "red") == 0) {
+                if (hue >= colors.red_hue_min || hue <= colors.red_hue_max) {
+                    color_detected = true;
+                }
+            } else {
+                if (hue >= colors.blue_hue_min && hue <= colors.blue_hue_max) {
+                    color_detected = true;
+                }
+            }
         }
+        pros::lcd::print(3, "Color detected: %d", color_detected);
+        
+        if (color_detected) {
+            pros::delay(180);
+            
+            // Use setter method instead of direct access
+            manager->set_color_sorting(true);
+            
+            upper_intake.move_voltage(-12000);
+            pros::delay(150);
+            
+            upper_intake.move_voltage(12000);
+            
+            // Use setter method instead of direct access
+            manager->set_color_sorting(false);
+            
+            // pros::delay(300);
+        }
+        pros::lcd::print(4, "Color sorting: %d", manager->color_sorting());
+        
+        pros::delay(20);
     }
-    
-    // Check if task is running
-    bool is_running() {
-        return detection_task != nullptr;
-    }
-    
-    // Destructor
-    ~ColorDetectionManager() {
-        stop();
-    }
-};
+}    
 
-
-// Function to start the color detection thread
-void start_color_detection(const char* color) {
-    // Validate color parameter
-    if (strcmp(color, "red") != 0 && strcmp(color, "blue") != 0) {
-        std::cout << "Invalid color parameter. Use 'red' or 'blue'" << std::endl;
-        return;
-    }
-    
-    // Allocate memory for the color parameter
-    char* color_param = (char*)malloc(strlen(color) + 1);
-    strcpy(color_param, color);
-    
-    // Create the thread
-    pros::Task color_detection_task(color_piston_control, (void*)color_param, "Color Detection");
-}
+ColorDetectionManager color_manager;
 
 /**
  * @brief Follow a 2D motion profile using RAMSETE and drivetrain controllers
@@ -433,6 +474,7 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
     if (route.empty()) return false;
     logger->log("Following trajectory");
     std::cout << "Following trajectory" << std::endl;
+    // pros::delay(2000); 
     // left_mg.getveloc
     
     const double START_TIME = pros::millis();
@@ -440,13 +482,41 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
     const double track_width = 12.7; // inches
 
     lady_brown.setState(route[0][6]);
-    size_t trajectory_index = 1;
+    size_t trajectory_index = 0;
     Pose new_pos = {route[1][2], route[1][3], route[1][4]};
     odometry.setPose(new_pos);
 
     logger->log("Initial pose: %f %f %f", new_pos.x, new_pos.y, new_pos.theta);
     // Main control loop
     logger->log("Route size: %d", route.size());
+    // lady_brown.setState(2);
+    // pros::delay(1000);
+    // lady_brown.setState(0)
+    const auto& snode = route[0];
+    if (snode[1] == 1){
+        intake.move(127);
+    } else if (snode[1] == -1){
+        // pros::Motor 
+        lower_intake.move(127);
+        upper_intake.move(0);
+    } else {
+        intake.move(0);
+    }
+
+    // Toggle clamp state
+    if (snode[2]){
+        clamp_state = !clamp_state;
+        mogo_mech.set_value(clamp_state);
+    }
+
+    lady_brown.setState(snode[6]);
+
+    if (snode[3]){
+        doinker_state = !doinker_state;
+        doinker.set_value(doinker_state);
+    }
+    
+    
     while (trajectory_index < route.size()) {
         // logger->log("Trajectory index: %d", trajectory_index);
         odometry.update();
@@ -471,7 +541,15 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
             const auto& node = route[trajectory_index];
             
             // Move intake (value is either -1, 0, or 1)
-            intake.move(127*node[1]);
+            if (node[1] == 1){
+                intake.move(127);
+            } else if (node[1] == -1){
+                // pros::Motor 
+                lower_intake.move(127);
+                upper_intake.move(0);
+            } else {
+                intake.move(0);
+            }
 
             // Toggle clamp state
             if (node[2]){
@@ -480,6 +558,11 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
             }
 
             lady_brown.setState(node[6]);
+
+            if (node[3]){
+                doinker_state = !doinker_state;
+                doinker.set_value(doinker_state);
+            }
             // Doinker prolly
 
             // Lady brown
@@ -504,6 +587,8 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
         const double goal_theta = waypoint[4];
         const double goal_v = waypoint[5];
         const double goal_w = waypoint[6];
+
+
         logger->log("Pose: %f %f %f", current_pose.x, current_pose.y, current_pose.theta);
         logger->log("Goal: %f %f %f", goal_x, goal_y, goal_theta);
 
@@ -556,8 +641,8 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
         
         // Convert RAMSETE output to wheel velocities
         auto wheel_velocities = ramsete.calculate_wheel_velocities(
-            goal_v, // linear velocity
-            goal_w, // angular velocity
+            ramsete_output[0], // linear velocity
+            ramsete_output[1], // angular velocity
             2.75,             // wheel diameter (inches)
             48.0/36.0,         // gear ratio
             track_width       // track width (inches)
@@ -741,16 +826,12 @@ void initialize() {
 	pros::lcd::initialize();
 	pros::lcd::set_text(1, "Hello PROS User!");
 	pros::lcd::register_btn1_cb(on_center_button);
-    // lb.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-
-    start_color_detection("red");
-
-
-    // std::cin.tie(0);
 
 	left_mg.set_encoder_units_all(pros::E_MOTOR_ENCODER_COUNTS);
 	right_mg.set_encoder_units_all(pros::E_MOTOR_ENCODER_COUNTS);
-    // pinMode(1, OUTPUT);
+
+    color_manager.start("red");
+
 
     lady_brown.start();  // Start the control task
 
@@ -761,7 +842,6 @@ void initialize() {
 
 	// autonomous() // For outside of competition testing purposes
     logger->log("Robot initialized");
-
 }
 
 /**
@@ -799,9 +879,9 @@ void autonomous() {
     logger->log("Program type: %s", program_type.c_str());
 	if (program_type == "autonomous"){
         Odometry odometry(left_mg, right_mg, side_encoder, imu_sensor, WHEEL_BASE_WIDTH, 0.0, false, true, false);
-        RamseteController ramsete(2.0, 0.7, 4.0*12, 5.0, 0.0254000508);
+        RamseteController ramsete(2.0, 0.7, 4.5*12, 5.0, 0.0254000508);
         // DrivetrainController drivetrain(6.45734320655, 1.67811141649, 0.266620951361, 3.64408225075, 0.00, 0.0); // 
-        DrivetrainController drivetrain(6.45734320655, 1.67811141649, 0.266620951361, 3.64408225075, 0.00, 0.0); // 
+        DrivetrainController drivetrain(2.5, 1.85, 0.3, 9.0, 0.00, 0.0); // 
         logger->log("Starting autonomous");
 
         // 003
@@ -811,6 +891,9 @@ void autonomous() {
         // while (true){
         //     pros::delay(20);
         // }
+        // double test_vel = 2.0;
+        // left_mg.move_velocity(test_vel);
+        // right_mg.move_velocity(test_vel);
         // PID_controller();
         followTrajectory(route, odometry, ramsete, drivetrain, left_mg, right_mg);
         // collect_velocity_vs_voltage_data();
@@ -842,22 +925,33 @@ void opcontrol() {
     printf("Starting opcontrol\n");
     lady_brown.setState(3); // Set to manual control
     bool manual_control = false;
+
     pros::Motor lb = lady_brown.getMotor();
 	while (true) {
 		// Arcade control scheme
+        // double hue = optical_sensor.get_hue();
+
+        // pros::lcd::print(0, "Hue: %f", hue);
 		int dir = (master.get_analog(ANALOG_LEFT_Y));    // Gets amount forward/backward from left joystick
 		int turn = joystickCurve(master.get_analog(ANALOG_RIGHT_X));  // Gets the turn left/right from right joystick
 		left_mg.move(dir + turn);                      // Sets left motor voltage
 		right_mg.move(dir - turn);                     // Sets right motor voltage
-
-        if (master.get_digital(DIGITAL_R1)) {
-            intake.move_velocity(200);
+        
+        // pros::lcd::print(5, "Color sorting: %d", color_manager.color_sorting());
+        if (color_manager.color_sorting()){
+            
         }
-         else if (master.get_digital(DIGITAL_X)) {
-            intake.move_velocity(-200);
+        else if (master.get_digital(DIGITAL_R1)) {
+            intake.move_voltage(12000);
+        }
+         else if (master.get_digital(DIGITAL_R2)) {
+            intake.move_voltage(-12000);
+        } else if (master.get_digital(DIGITAL_A)) {
+            upper_intake.move_voltage(0);
+            lower_intake.move_voltage(12000);
         }
          else {
-            intake.move_velocity(0);
+            intake.move_voltage(0);
         }
 
         bool old_state = mogo_mech.get_state();
@@ -867,15 +961,15 @@ void opcontrol() {
         }
 
 
-        if (master.get_digital(DIGITAL_L2)){
+        else if (master.get_digital(DIGITAL_L2)){
 
             lady_brown.setState(3); // Set to manual control
-            lb.move(127);
+            lb.move(-127);
             lady_brown.setManualPosition();
             lady_brown.setManualControl(true);
-        } else if (master.get_digital(DIGITAL_R2)){
+        } else if (master.get_digital(DIGITAL_Y)){
             lady_brown.setState(3); // Set to manual control
-            lb.move(-127);
+            lb.move(127);
             lady_brown.setManualPosition();
             lady_brown.setManualControl(true);
         } else {
@@ -884,22 +978,18 @@ void opcontrol() {
             lady_brown.setManualControl(false);
         }
 
-        if (master.get_digital_new_press(DIGITAL_A)){
+        if (master.get_digital_new_press(DIGITAL_DOWN)){
             lady_brown.setState(1);
         }
+        if (master.get_digital_new_press(DIGITAL_RIGHT)){
+            lady_brown.setState(0);
+        }
 
-        // if (!prev_lady_brown_state && master.get_digital(DIGITAL_L2)){
-        //     lady_brown_state = (lady_brown_state + 1) % 3;
-        //     lady_brown.setState(lady_brown_state);
-        // }
-        // prev_lady_brown_state = master.get_digital(DIGITAL_L2);
+        if (master.get_digital_new_press(DIGITAL_UP)){
+            color_manager.stop();
+        }
 
-        // if (master.get_digital_new_press(DIGITAL_UP)){
-        //     lady_brown.setState(3);
-        // }
         intake_lift.input_toggle(master.get_digital(DIGITAL_DOWN));
-
-        color_sort.input_toggle(master.get_digital(DIGITAL_UP));
 
         doinker.input_toggle(master.get_digital(DIGITAL_B));
 

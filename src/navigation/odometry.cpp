@@ -1,5 +1,4 @@
 #include "navigation/odometry.h"
-#include <algorithm>
 #include <numeric>
 #include "utilities/logger.h"
 
