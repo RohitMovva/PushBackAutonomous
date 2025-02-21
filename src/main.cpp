@@ -1,4 +1,5 @@
 #include "main.h"
+#include "routes/routes.h"
 #include "utilities/logger.h"
 #include "pros/rotation.hpp"
 #include "filters/slew_rate_limiter.h"
@@ -202,7 +203,7 @@ std::string program_type = "autonomous";
 // std::string program_type = "calibrate_metrics";
 
 // Routes
-std::vector<std::vector<double>> route = temp; // used to be skills
+std::vector<std::vector<double>> route = skills; // used to be skills
 // std::vector<std::vector<double>> route = {}; // Driver or Calibration
 
 // Robot parameters (needs to be tweaked later)
@@ -396,7 +397,7 @@ void color_motor_control(const char* target_color, ColorDetectionManager* manage
     
     ColorInfo colors = {
         355, 25,   // Red hue range
-        200, 240,  // Blue hue range
+        180, 240,  // Blue hue range
         0.5         // Minimum saturation threshold
     };
 
@@ -404,7 +405,10 @@ void color_motor_control(const char* target_color, ColorDetectionManager* manage
     
     while (true) {
         i++;
+        optical_sensor.set_integration_time(20.0);
         optical_sensor.set_led_pwm(100);
+        pros::lcd::print(5, "Integration time: %f", optical_sensor.get_integration_time());
+        pros::lcd::print(6, "LED PWM: %d", optical_sensor.get_led_pwm());
         
         double hue = optical_sensor.get_hue();
         pros::lcd::print(0, "Hue: %f", hue);
@@ -428,24 +432,23 @@ void color_motor_control(const char* target_color, ColorDetectionManager* manage
         pros::lcd::print(3, "Color detected: %d", color_detected);
         
         if (color_detected) {
-            pros::delay(180);
+            pros::delay(245);
             
             // Use setter method instead of direct access
             manager->set_color_sorting(true);
             
-            upper_intake.move_voltage(-12000);
-            pros::delay(150);
+            upper_intake.move_voltage(-1000);
+            pros::delay(100);
             
             upper_intake.move_voltage(12000);
             
             // Use setter method instead of direct access
             manager->set_color_sorting(false);
             
-            // pros::delay(300);
         }
         pros::lcd::print(4, "Color sorting: %d", manager->color_sorting());
         
-        pros::delay(20);
+        pros::delay(15);
     }
 }    
 
@@ -830,7 +833,7 @@ void initialize() {
 	left_mg.set_encoder_units_all(pros::E_MOTOR_ENCODER_COUNTS);
 	right_mg.set_encoder_units_all(pros::E_MOTOR_ENCODER_COUNTS);
 
-    color_manager.start("red");
+    color_manager.start("blue");
 
 
     lady_brown.start();  // Start the control task
@@ -937,7 +940,6 @@ void opcontrol() {
 		left_mg.move(dir + turn);                      // Sets left motor voltage
 		right_mg.move(dir - turn);                     // Sets right motor voltage
         
-        // pros::lcd::print(5, "Color sorting: %d", color_manager.color_sorting());
         if (color_manager.color_sorting()){
             
         }
