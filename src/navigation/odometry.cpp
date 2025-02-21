@@ -229,7 +229,7 @@ void Odometry::update() {
         deltaY = forwardDisplacement * sin(currentPose.theta) +
                 deltaLateral * cos(currentPose.theta);
     }
-
+    
     Logger::getInstance()->log("DeltaX: %f, DeltaY: %f", deltaX, deltaY);
     
     // Update position with optional Kalman filtering

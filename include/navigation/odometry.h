@@ -2,7 +2,6 @@
 #define ODOMETRY_H
 
 #include "api.h"
-#include "pros/adi.hpp"
 #include "filters/kalman_2d.h"
 #include "filters/heading_filter.h"
 #include "filters/slew_rate_limiter.h"
