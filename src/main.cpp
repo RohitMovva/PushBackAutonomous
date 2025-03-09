@@ -4,6 +4,13 @@
 #include "pros/rotation.hpp"
 #include "filters/slew_rate_limiter.h"
 
+// TODO test straight line
+// TODO test right curve and left curves (and compare them)
+
+// TODO test odometry by driving
+// TODO test with and without RAMSETE and compare performance
+
+
 class Vector2 {
 public:
   Vector2(float x, float y): x(x), y(y) {}
@@ -24,9 +31,10 @@ private:
     std::atomic<int> target_state{0};
     
     // PID constants - these may need tuning
-    const double kP = 1.3;
-    const double kI = 0.0;
+    const double kP = 1.5;
+    const double kI = 0.07;
     const double kD = 0.0;
+    const double kG = 1.0;
 
     pros::Rotation rot_sensor;
 
@@ -34,10 +42,11 @@ private:
     
     // Position setpoints in degrees (adjusted for gear ratio)
     // With 12:64 ratio, multiply desired angles by (64/12) = 5.33
-    double STATE_POSITIONS[4] = {
+    double STATE_POSITIONS[5] = {
         0.0,
-        -36.5,    // ~53.3 degrees at motor
+        -34.0,    // ~53.3 degrees at motor
         -190.5,    // ~586.7 degrees at motor
+        -160.0,    // Descore position
         0.0, // Placeholder for manual control
     };
     
@@ -52,10 +61,11 @@ private:
         while (error < -180) error += 360;
 
         double cp = current_pos;
+        
         // while (cp > 180) cp -= 360;
         // while (cp < -180) cp += 360;
 
-        if (cp > 0 && cp < 180 && abs(error) > 100.0){
+        if (cp > 0 && cp < 180 && std::abs(error) > 100.0){
             error += 360.0;
         }
         
@@ -95,9 +105,9 @@ public:
     }
     
     void setState(int new_state) {
-        if (new_state >= 0 && new_state <= 3) {
-            target_state = new_state;
-        }
+        // if (new_state >= 0 && new_state <= 3) {
+        target_state = new_state;
+        // }
     }
     
     int getState() const {
@@ -139,7 +149,7 @@ public:
     }
 
     void setManualPosition() {
-        STATE_POSITIONS[3] = rot_sensor.get_position() / 100.0;
+        STATE_POSITIONS[4] = rot_sensor.get_position() / 100.0;
     }
 
     
@@ -194,7 +204,7 @@ float prev_heading;
 Logger* logger = Logger::getInstance();
 
 
-pros::Rotation side_encoder(10); // Lateral tracking encoder (PORT MIGHT BE WRONG)
+pros::Rotation side_encoder(5); // Lateral tracking encoder (PORT MIGHT BE WRONG)
 // Program types
 // std::string program_type = "driver";
 // std::string program_type = "autonomous";
@@ -203,12 +213,11 @@ std::string program_type = "autonomous";
 // std::string program_type = "calibrate_metrics";
 
 // Routes
-std::vector<std::vector<double>> route = skills; // used to be skills
+std::vector<std::vector<double>> route = sawp; // used to be skills
 // std::vector<std::vector<double>> route = {}; // Driver or Calibration
 
 // Robot parameters (needs to be tweaked later)
 const float WHEEL_DIAMETER = 2.75;  // Diameter of the wheels in inches
-// TODO update for blue cartridges on new bot
 const float TICKS_PER_ROTATION = 300.0;  // Encoder ticks per wheel rotation for blue cartridges
 const float GEAR_RATIO = 36.0/48.0;  // Gear ratio of the drivetrain
 const double WHEEL_BASE_WIDTH = 12.7;  // Distance between the left and right wheels in inches
@@ -407,14 +416,14 @@ void color_motor_control(const char* target_color, ColorDetectionManager* manage
         i++;
         optical_sensor.set_integration_time(20.0);
         optical_sensor.set_led_pwm(100);
-        pros::lcd::print(5, "Integration time: %f", optical_sensor.get_integration_time());
-        pros::lcd::print(6, "LED PWM: %d", optical_sensor.get_led_pwm());
+        // pros::lcd::print(5, "Integration time: %f", optical_sensor.get_integration_time());
+        // pros::lcd::print(6, "LED PWM: %d", optical_sensor.get_led_pwm());
         
         double hue = optical_sensor.get_hue();
-        pros::lcd::print(0, "Hue: %f", hue);
+        // pros::lcd::print(0, "Hue: %f", hue);
         double saturation = optical_sensor.get_saturation();
-        pros::lcd::print(1, "Saturation: %f", saturation);
-        pros::lcd::print(2, "i: %d", i);
+        // pros::lcd::print(1, "Saturation: %f", saturation);
+        // pros::lcd::print(2, "i: %d", i);
         
         bool color_detected = false;
         
@@ -429,7 +438,7 @@ void color_motor_control(const char* target_color, ColorDetectionManager* manage
                 }
             }
         }
-        pros::lcd::print(3, "Color detected: %d", color_detected);
+        // pros::lcd::print(3, "Color detected: %d", color_detected);
         
         if (color_detected) {
             pros::delay(245);
@@ -446,7 +455,7 @@ void color_motor_control(const char* target_color, ColorDetectionManager* manage
             manager->set_color_sorting(false);
             
         }
-        pros::lcd::print(4, "Color sorting: %d", manager->color_sorting());
+        // pros::lcd::print(4, "Color sorting: %d", manager->color_sorting());
         
         pros::delay(15);
     }
@@ -477,12 +486,13 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
     if (route.empty()) return false;
     logger->log("Following trajectory");
     std::cout << "Following trajectory" << std::endl;
-    // pros::delay(2000); 
+    // pros::delay(2000);
     // left_mg.getveloc
     
     const double START_TIME = pros::millis();
     const double DT = 25;  // 25ms fixed timestep matching motion profile
-    const double track_width = 12.7; // inches
+    // TODO retune track width
+    const double track_width = 13.5; // inches
 
     lady_brown.setState(route[0][6]);
     size_t trajectory_index = 0;
@@ -521,6 +531,7 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
     
     
     while (trajectory_index < route.size()) {
+        pros::lcd::print(0, "Trajectory index: %d", trajectory_index);
         // logger->log("Trajectory index: %d", trajectory_index);
         odometry.update();
         // logger->log("Odom Updated");
@@ -534,6 +545,7 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
         
         // Get current state from odometry
         Pose current_pose = odometry.getPose();
+        pros::lcd::print(1, "Current pose: %f %f %f", current_pose.x, current_pose.y, current_pose.theta);
         // logger->log("Got pose");
         auto velocities = odometry.getFilteredVelocities();
         // logger->log("Velocities: %f %f", velocities.first, velocities.second);
@@ -650,8 +662,8 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
             48.0/36.0,         // gear ratio
             track_width       // track width (inches)
         );
-        logger->log("Left wheel velocities: %f %f", wheel_velocities[0], odometry.getLeftVelocity());
-        logger->log("Right wheel velocities: %f %f", wheel_velocities[1], odometry.getRightVelocity());
+        logger->log("Left wheel velocities: %f %f", wheel_velocities[0], odometry.getLeftVelocity().linear);
+        logger->log("Right wheel velocities: %f %f", wheel_velocities[1], odometry.getRightVelocity().linear);
         
         // Calculate motor voltages using drivetrain controller
         auto voltages = drivetrain.calculateVoltages(
@@ -667,12 +679,9 @@ bool followTrajectory(const std::vector<std::vector<double>>& route,
         // Apply voltages to motors
         left_mg.move(voltages.left);
         right_mg.move(voltages.right);
-        logger->log("leftmg voltage %d", right_mg.get_voltage());
-
-        // std::cout << wheel_velocities[0] << " " << velocities.first << std::endl;
         // logger->log("Wheel velocities: %f %f", wheel_velocities[0], odometry.getLeftVelocity());
         
-        // Increment trajectory index based on fixed timestep
+        // Increment trajectory index based
         trajectory_index++;
         
         pros::delay(DT);
@@ -833,7 +842,7 @@ void initialize() {
 	left_mg.set_encoder_units_all(pros::E_MOTOR_ENCODER_COUNTS);
 	right_mg.set_encoder_units_all(pros::E_MOTOR_ENCODER_COUNTS);
 
-    color_manager.start("blue");
+    color_manager.start("red");
 
 
     lady_brown.start();  // Start the control task
@@ -842,6 +851,8 @@ void initialize() {
     imu_sensor.reset();
 
     lb_encoder.reset();
+
+    side_encoder.set_reversed(true);
 
 	// autonomous() // For outside of competition testing purposes
     logger->log("Robot initialized");
@@ -881,7 +892,7 @@ void competition_initialize() {
 void autonomous() {
     logger->log("Program type: %s", program_type.c_str());
 	if (program_type == "autonomous"){
-        Odometry odometry(left_mg, right_mg, side_encoder, imu_sensor, WHEEL_BASE_WIDTH, 0.0, false, true, false);
+        Odometry odometry(left_mg, right_mg, side_encoder, imu_sensor, WHEEL_BASE_WIDTH, 2.419, false, true, false);
         RamseteController ramsete(2.0, 0.7, 4.5*12, 5.0, 0.0254000508);
         // DrivetrainController drivetrain(6.45734320655, 1.67811141649, 0.266620951361, 3.64408225075, 0.00, 0.0); // 
         DrivetrainController drivetrain(2.5, 1.85, 0.3, 9.0, 0.00, 0.0); // 
@@ -926,8 +937,20 @@ int joystickCurve(int x, double a=2.5){
 void opcontrol() {
     bool prev_lady_brown_state = false;
     printf("Starting opcontrol\n");
-    lady_brown.setState(3); // Set to manual control
+    lady_brown.setState(4); // Set to manual control
     bool manual_control = false;
+    pros::lcd::print(5, "hallo");
+    // Odometry odometry(left_mg, right_mg, side_encoder, imu_sensor, WHEEL_BASE_WIDTH, 3.0, false, true, false); // 2.419
+    pros::lcd::print(4, "hai");
+    Pose new_pos = {0, 0, 0};
+    double left_pos = 0;
+    double right_pos = 0;
+
+    left_mg.tare_position_all();
+    right_mg.tare_position_all();
+
+    
+    // odometry.setPose(new_pos);
 
     pros::Motor lb = lady_brown.getMotor();
 	while (true) {
@@ -935,24 +958,29 @@ void opcontrol() {
         // double hue = optical_sensor.get_hue();
 
         // pros::lcd::print(0, "Hue: %f", hue);
+        pros::lcd::print(3, "Got here");
+        // odometry.update();
+        pros::lcd::print(4, "odom here");
+        // Pose current_pose = odometry.getPose();
+        // pros::lcd::print(1, "Current pose: %f %f %f", current_pose.x, current_pose.y, current_pose.theta);
 		int dir = (master.get_analog(ANALOG_LEFT_Y));    // Gets amount forward/backward from left joystick
 		int turn = joystickCurve(master.get_analog(ANALOG_RIGHT_X));  // Gets the turn left/right from right joystick
 		left_mg.move(dir + turn);                      // Sets left motor voltage
 		right_mg.move(dir - turn);                     // Sets right motor voltage
         
         if (color_manager.color_sorting()){
-            
+            ;
         }
         else if (master.get_digital(DIGITAL_R1)) {
             intake.move_voltage(12000);
         }
-         else if (master.get_digital(DIGITAL_R2)) {
+        else if (master.get_digital(DIGITAL_R2)) {
             intake.move_voltage(-12000);
         } else if (master.get_digital(DIGITAL_A)) {
             upper_intake.move_voltage(0);
             lower_intake.move_voltage(12000);
         }
-         else {
+        else {
             intake.move_voltage(0);
         }
 
@@ -965,12 +993,12 @@ void opcontrol() {
 
         else if (master.get_digital(DIGITAL_L2)){
 
-            lady_brown.setState(3); // Set to manual control
+            lady_brown.setState(4); // Set to manual control
             lb.move(-127);
             lady_brown.setManualPosition();
             lady_brown.setManualControl(true);
         } else if (master.get_digital(DIGITAL_Y)){
-            lady_brown.setState(3); // Set to manual control
+            lady_brown.setState(4); // Set to manual control
             lb.move(127);
             lady_brown.setManualPosition();
             lady_brown.setManualControl(true);
@@ -991,9 +1019,25 @@ void opcontrol() {
             color_manager.stop();
         }
 
+        if (master.get_digital_new_press(DIGITAL_X)){
+            lady_brown.setState(3);
+        }
+
         intake_lift.input_toggle(master.get_digital(DIGITAL_DOWN));
 
         doinker.input_toggle(master.get_digital(DIGITAL_B));
+
+        std::vector<double> left_positions = left_mg.get_position_all();
+        std::vector<double> right_positions = right_mg.get_position_all();
+
+        left_pos = (left_positions[0] + left_positions[1] + left_positions[2]) / 3.0;
+        right_pos = (right_positions[0] + right_positions[1] + right_positions[2]) / 3.0;
+
+        // Convert ticks to inches
+        left_pos = ticksToInches(left_pos);
+        right_pos = ticksToInches(right_pos);
+
+        pros::lcd::print(0, "Left pos: %f, Right pos: %f", left_pos, right_pos);
 
 		pros::delay(20);                               // Run for 20 ms then update
 	}

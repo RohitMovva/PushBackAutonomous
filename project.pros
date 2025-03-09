@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "aaa",
+    "project_name": "testing",
     "target": "v5",
     "templates": {
       "kernel": {
@@ -256,7 +256,8 @@
     },
     "upload_options": {
       "icon": "X",
-      "slot": 3
+      "slot": 1,
+      "description": "wtf man"
     },
     "use_early_access": false
   }

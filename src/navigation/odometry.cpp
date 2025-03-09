@@ -45,8 +45,8 @@ Odometry::Odometry(pros::MotorGroup& left, pros::MotorGroup& right,
     , rightDrive(right)
     , lateralEncoder(lateral)
     , imu(imuSensor)
-    , leftVelocityLimiter(75, 75)
-    , rightVelocityLimiter(75, 75)
+    , leftVelocityLimiter(100, 100)
+    , rightVelocityLimiter(100, 100)
     , headingFilter() // 0.8
     , useHeadingFilter(enable_heading_filter)
     , useVelocityFilters(enable_velocity_filters)
@@ -63,7 +63,7 @@ double Odometry::ticksToInches(double ticks) {
 
 double Odometry::latTicksToInches(int ticks) {
     // Convert lateral encoder ticks to inches
-    return ((double(ticks) / 1000.0) / 360.0) * WHEEL_CIRCUMFERENCE;
+    return ((double(ticks) / 100.0) / 360.0) * WHEEL_CIRCUMFERENCE;
 }
 
 
@@ -131,7 +131,7 @@ void Odometry::reset() {
     
     leftDrive.tare_position_all();
     rightDrive.tare_position_all();
-    lateralEncoder.reset();
+    lateralEncoder.reset_position();
     imu.tare_rotation();
 }
 
@@ -168,8 +168,9 @@ void Odometry::update() {
     // Get and validate encoder readings
     std::vector<double> leftPositions = getMotorPositionsInches(leftDrive.get_position_all(), getAveragePosition(prevLeftPos));
     std::vector<double> rightPositions = getMotorPositionsInches(rightDrive.get_position_all(), getAveragePosition(prevRightPos));
-    double lateralPos = latTicksToInches(lateralEncoder.get_position());
-    // lateralEncoder.
+    double lateralPos = latTicksToInches(lateralEncoder.get_position()) + prevLateralPos;
+    pros::lcd::print(5, "Lateral Pos: %f", lateralPos);
+
     lateralPos = 0;
     // Left drive info
     Logger::getInstance()->log("Left Positions: %f %f %f", leftDrive.get_position_all()[0], leftDrive.get_position_all()[1], leftDrive.get_position_all()[2]);
@@ -186,6 +187,7 @@ void Odometry::update() {
     double deltaRight = currentRightPos - getAveragePosition(prevRightPos);
     Logger::getInstance()->log("DeltaLeft: %f, DeltaRight: %f", deltaLeft, deltaRight);
     double deltaLateral = lateralPos - prevLateralPos;
+    pros::lcd::print(6, "Delta lateral %f", deltaLateral);
     // Update velocities with optional filtering
     if (useVelocityFilters) {
         leftVelocity.linear = leftVelocityLimiter.calculate(deltaLeft / deltaTime, deltaTime);
@@ -217,6 +219,7 @@ void Odometry::update() {
         double turnRadius = forwardDisplacement / deltaTheta;
         double centralChord = 2.0 * turnRadius * sin(deltaTheta / 2.0);
         double lateralChord = deltaLateral - (odom_wheel_offset * deltaTheta);
+        lateralChord = 0;
         
         deltaX = centralChord * cos(currentPose.theta + deltaTheta / 2.0) -
                 lateralChord * sin(currentPose.theta + deltaTheta / 2.0);
@@ -253,7 +256,7 @@ void Odometry::update() {
     prevTime = lastUpdateTime;
     lastUpdateTime = currentTime;
 
-    lateralEncoder.reset();
+    lateralEncoder.reset_position();
     imu.tare_heading();
     leftDrive.tare_position_all();
     rightDrive.tare_position_all();
@@ -339,7 +342,7 @@ void Odometry::disableSensor(const std::string& sensor) {
         rightVelocityLimiter.reset();
     } else if (sensor == "lateral") {
         // Reset lateral tracking
-        prevLateralPos = lateralEncoder.get_position();
+        prevLateralPos = lateralEncoder.get_position()*-1;
     }
 }
 

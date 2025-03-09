@@ -41,6 +41,48 @@ goal_x = np.array(goal_x)
 goal_y = np.array(goal_y)
 goal_theta = np.array(goal_theta)
 
+# Calculate movement direction vectors
+# We need at least 2 points to compute direction
+velocity_x = np.zeros_like(actual_x)
+velocity_y = np.zeros_like(actual_y)
+movement_theta = np.zeros_like(actual_theta)
+is_moving_backwards = np.zeros_like(actual_theta, dtype=bool)
+
+# Calculate velocities and movement direction for frames after the first one
+for i in range(1, len(actual_x)):
+    # Calculate velocity components
+    velocity_x[i] = actual_x[i] - actual_x[i-1]
+    velocity_y[i] = actual_y[i] - actual_y[i-1]
+    
+    # Calculate velocity magnitude
+    velocity_magnitude = np.sqrt(velocity_x[i]**2 + velocity_y[i]**2)
+    
+    # If at rest, use the robot's orientation angle
+    if velocity_magnitude < 0.01:
+        # If at rest, use the robot's orientation angle
+        movement_theta[i] = actual_theta[i]
+        is_moving_backwards[i] = False
+    else:
+        # Calculate movement direction angle
+        if velocity_x[i] != 0 or velocity_y[i] != 0:  # Avoid division by zero
+            movement_theta[i] = np.arctan2(velocity_y[i], velocity_x[i])
+            
+            # Determine if moving backwards by comparing movement direction with robot orientation
+            # Normalize the difference between angles to [-pi, pi]
+            angle_diff = ((movement_theta[i] - actual_theta[i] + np.pi) % (2 * np.pi)) - np.pi
+            is_moving_backwards[i] = abs(angle_diff) > np.pi/2
+
+# For the first frame, use the robot's orientation since we can't determine velocity
+if len(actual_x) > 0:
+    # For first frame, default to orientation
+    movement_theta[0] = actual_theta[0]
+    is_moving_backwards[0] = False
+    
+    # Only copy from second frame if we have more than one frame
+    if len(actual_x) > 1:
+        velocity_x[0] = velocity_x[1]
+        velocity_y[0] = velocity_y[1]
+
 # Create the animation
 fig, ax = plt.subplots(figsize=(10, 8))
 ax.set_aspect('equal')
@@ -57,9 +99,10 @@ goal_line, = ax.plot([], [], 'r--', label='Goal Path', linewidth=2)
 actual_point, = ax.plot([], [], 'bo', markersize=10)
 goal_point, = ax.plot([], [], 'ro', markersize=10)
 
-# Robot orientation arrows
-actual_arrow = None
+# Robot orientation and movement arrows
+actual_orientation_arrow = None
 goal_arrow = None
+movement_arrow = None
 
 def init():
     ax.set_xlim(x_min, x_max)
@@ -68,11 +111,11 @@ def init():
     ax.set_xlabel('X Position')
     ax.set_ylabel('Y Position')
     ax.set_title('Robot Path Animation')
-    ax.legend()
+    ax.legend(loc='upper left')
     return actual_line, goal_line, actual_point, goal_point
 
 def animate(i):
-    global actual_arrow, goal_arrow
+    global actual_orientation_arrow, goal_arrow, movement_arrow
     
     # Update path lines
     actual_line.set_data(actual_x[:i+1], actual_y[:i+1])
@@ -83,26 +126,44 @@ def animate(i):
     goal_point.set_data([goal_x[i]], [goal_y[i]])
     
     # Remove previous arrows
-    if actual_arrow:
-        actual_arrow.remove()
+    if actual_orientation_arrow:
+        actual_orientation_arrow.remove()
     if goal_arrow:
         goal_arrow.remove()
+    if movement_arrow:
+        movement_arrow.remove()
     
     # Add new orientation arrows
     arrow_length = 2.0
-    actual_arrow = ax.arrow(actual_x[i], actual_y[i],
+    
+    # Robot orientation arrow (blue)
+    actual_orientation_arrow = ax.arrow(actual_x[i], actual_y[i],
                           arrow_length * np.cos(actual_theta[i]),
                           arrow_length * np.sin(actual_theta[i]),
                           head_width=0.5, head_length=0.8, fc='blue', ec='blue')
+    
+    # Goal orientation arrow (red)
     goal_arrow = ax.arrow(goal_x[i], goal_y[i],
                         arrow_length * np.cos(goal_theta[i]),
                         arrow_length * np.sin(goal_theta[i]),
                         head_width=0.5, head_length=0.8, fc='red', ec='red')
     
-    return actual_line, goal_line, actual_point, goal_point, actual_arrow, goal_arrow
+    # Movement direction arrow (green)
+    movement_direction = movement_theta[i]
+    
+    # If moving backwards, flip the arrow direction by 180 degrees
+    if is_moving_backwards[i]:
+        movement_direction = (movement_direction + np.pi) % (2 * np.pi)
+    
+    movement_arrow = ax.arrow(actual_x[i], actual_y[i],
+                           arrow_length * np.cos(movement_direction),
+                           arrow_length * np.sin(movement_direction),
+                           head_width=0.5, head_length=0.8, fc='green', ec='green')
+    
+    return actual_line, goal_line, actual_point, goal_point, actual_orientation_arrow, goal_arrow, movement_arrow
 
 # Create animation
 anim = FuncAnimation(fig, animate, init_func=init, frames=len(actual_x),
-                    interval=25, blit=True, repeat=True)
+                    interval=25, blit=True, repeat=False)
 
 plt.show()
