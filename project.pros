@@ -1,7 +1,7 @@
 {
   "py/object": "pros.conductor.project.Project",
   "py/state": {
-    "project_name": "testing",
+    "project_name": "skills",
     "target": "v5",
     "templates": {
       "kernel": {
@@ -256,7 +256,7 @@
     },
     "upload_options": {
       "icon": "X",
-      "slot": 1,
+      "slot": 5,
       "description": "wtf man"
     },
     "use_early_access": false

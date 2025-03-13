@@ -44,9 +44,9 @@ private:
     // With 12:64 ratio, multiply desired angles by (64/12) = 5.33
     double STATE_POSITIONS[5] = {
         0.0,
-        -34.0,    // ~53.3 degrees at motor
-        -190.5,    // ~586.7 degrees at motor
-        -160.0,    // Descore position
+        -34.0 + 9.00,    // ~53.3 degrees at motor
+        -200.5,    // ~586.7 degrees at motor
+        -160.0 + 10,    // Descore position
         0.0, // Placeholder for manual control
     };
     
@@ -54,7 +54,7 @@ private:
     double integral = 0;
     double prev_error = 0;
     
-    // Helper function to calculate PID
+    // Helper functon to calculate PID
     double calculatePID(double current_pos, double target_pos) {
         double error = target_pos - current_pos;
         while (error > 180) error -= 360;
@@ -213,7 +213,7 @@ std::string program_type = "autonomous";
 // std::string program_type = "calibrate_metrics";
 
 // Routes
-std::vector<std::vector<double>> route = sawp; // used to be skills
+std::vector<std::vector<double>> route = skills; // used to be skills
 // std::vector<std::vector<double>> route = {}; // Driver or Calibration
 
 // Robot parameters (needs to be tweaked later)
@@ -842,7 +842,7 @@ void initialize() {
 	left_mg.set_encoder_units_all(pros::E_MOTOR_ENCODER_COUNTS);
 	right_mg.set_encoder_units_all(pros::E_MOTOR_ENCODER_COUNTS);
 
-    color_manager.start("red");
+    color_manager.start("blue");
 
 
     lady_brown.start();  // Start the control task
@@ -1021,6 +1021,8 @@ void opcontrol() {
 
         if (master.get_digital_new_press(DIGITAL_X)){
             lady_brown.setState(3);
+        } else if (master.get_digital_new_press(DIGITAL_LEFT)){
+            lady_brown.setState(2);
         }
 
         intake_lift.input_toggle(master.get_digital(DIGITAL_DOWN));
