@@ -64,8 +64,9 @@ private:
         
         // while (cp > 180) cp -= 360;
         // while (cp < -180) cp += 360;
+        pros::lcd::print(2, "Current pos: %f", cp);
 
-        if (cp > 0 && cp < 180 && std::abs(error) > 100.0){
+        if (cp > -270 && cp < -180 && std::abs(error) > 50.0){
             error += 360.0;
         }
         
