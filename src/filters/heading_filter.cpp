@@ -1,4 +1,4 @@
-#include "filters/heading_filter.h"
+#include "filters/heading_filter.hpp"
 #include <cstring>
 
 // Helper function implementations

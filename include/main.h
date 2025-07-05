@@ -39,7 +39,7 @@
 /**
  * You should add more #includes here
  */
-//#include "okapi/api.hpp"
+// #include "okapi/api.hpp"
 
 /**
  * If you find doing pros::Motor() to be tedious and you'd prefer just to do
@@ -59,13 +59,14 @@
  * button press in opcontrol() for testing purposes).
  */
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
-void autonomous(void);
-void initialize(void);
-void disabled(void);
-void competition_initialize(void);
-void opcontrol(void);
+    void autonomous(void);
+    void initialize(void);
+    void disabled(void);
+    void competition_initialize(void);
+    void opcontrol(void);
 #ifdef __cplusplus
 }
 #endif
@@ -74,14 +75,16 @@ void opcontrol(void);
 /**
  * You can add C++-only headers here
  */
-//#include <iostream>
 #include "api.h"
 #include "pros/colors.h"
-#include "routes/routes.h"
-#include "navigation/odometry.h"
-#include "controllers/ramsete_controller.h"
-#include "controllers/drivetrain_controller.h"
-#include "hardware/enhanced_digital_out.h"
+#include "navigation/odometry.hpp"
+#include "controllers/ramsete_controller.hpp"
+#include "controllers/drivetrain_controller.hpp"
+#include "controllers/pid_controller.hpp"
+#include "navigation/trajectory.hpp"
+#include "hardware/enhanced_digital_out.hpp"
+#include "hardware/robot.hpp"
+#include "utilities/logger.hpp"
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -97,7 +100,6 @@ void opcontrol(void);
 #include <queue>
 #include <mutex>
 
-
 #endif
 
-#endif  // _PROS_MAIN_H_
+#endif // _PROS_MAIN_H_

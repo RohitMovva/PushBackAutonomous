@@ -1,5 +1,5 @@
-#include "controllers/drivetrain_controller.h"
-#include "utilities/logger.h"
+#include "controllers/drivetrain_controller.hpp"
+#include "utilities/logger.hpp"
 #include <algorithm>
 
 DrivetrainController::DrivetrainController(
@@ -35,13 +35,7 @@ DrivetrainController::MotorVoltages DrivetrainController::calculateVoltages(
     uint32_t currentTime = pros::millis();
     double dt = (currentTime - prevTime) / 1000.0;
     if (dt <= 0) dt = 0.025;  // Default to 25ms
-    
-    // Convert velocities to encoder ticks/sec for consistency
-    // double leftSetpointTicks = velocityToTicks(leftVelocitySetpoint);
-    // double rightSetpointTicks = velocityToTicks(rightVelocitySetpoint);
-    // double leftActualTicks = velocityToTicks(leftVelocityActual);
-    // double rightActualTicks = velocityToTicks(rightVelocityActual);
-    
+
     // Calculate errors in ticks/sec
     double leftVelocityError = leftVelocitySetpoint - leftVelocityActual;
     double rightVelocityError = rightVelocitySetpoint - rightVelocityActual;
@@ -98,10 +92,6 @@ DrivetrainController::MotorVoltages DrivetrainController::calculateVoltages(
 }
 
 double DrivetrainController::calculateFeedforward(double velocityTicks, double accelerationTicks) {
-    // double new_Ka = kA;
-    // if (std::signbit(accelerationTicks) == -1) {
-    //     new_Ka *= 1.5;
-    // }
     Logger::getInstance()->log("Velocity: %f, Acceleration: %f", velocityTicks, accelerationTicks);
     return std::copysign(kS, velocityTicks) + 
            kV * velocityTicks + 

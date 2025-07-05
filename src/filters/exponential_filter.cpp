@@ -1,4 +1,4 @@
-#include "filters/exponential_filter.h"
+#include "filters/exponential_filter.hpp"
 
 ExponentialFilter::ExponentialFilter(double smoothingFactor)
     : alpha(smoothingFactor)

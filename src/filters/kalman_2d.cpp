@@ -1,4 +1,4 @@
-#include "filters/kalman_2d.h"
+#include "filters/kalman_2d.hpp"
 
 Kalman2D::Kalman2D() 
     : x(std::vector<double>(4, 0.0))

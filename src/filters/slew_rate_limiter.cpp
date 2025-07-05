@@ -1,4 +1,4 @@
-#include "filters/slew_rate_limiter.h"
+#include "filters/slew_rate_limiter.hpp"
 
 SlewRateLimiter::SlewRateLimiter(double rateIncrease, double rateDecrease)
     : maxRateIncrease(rateIncrease)
