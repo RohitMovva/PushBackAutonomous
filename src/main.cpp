@@ -1,7 +1,5 @@
 #include "main.h"
 
-// Global Vars
-
 // Robot config
 pros::Controller master(pros::E_CONTROLLER_MASTER);
 pros::MotorGroup left_mg({-15, -10, -18}); // Creates a motor group with forwards ports 1 & 3 and reversed port 2
@@ -26,13 +24,6 @@ std::string program_type = "autonomous";
 std::vector<std::vector<double>> route;
 std::string route_name = "test2"; // used to be skills
 
-// Robot parameters (needs to be tweaked later)
-const float WHEEL_DIAMETER = 2.75;             // Diameter of the wheels in inches
-const float TICKS_PER_ROTATION = 300.0;        // Encoder ticks per wheel rotation for blue cartridges
-const float GEAR_RATIO = 36.0 / 48.0;          // Gear ratio of the drivetrain
-const double WHEEL_BASE_WIDTH = 14.1966209238; // Distance between the left and right wheels in inches
-const float DT = 0.01;                         // 10ms in seconds
-
 /**
  * Runs initialization code. This occurs as soon as the program is started.
  *
@@ -50,7 +41,8 @@ void initialize()
 
     side_encoder.set_reversed(true);
 
-    Odometry odometry(left_mg, right_mg, side_encoder, imu_sensor, WHEEL_BASE_WIDTH, 2.419, false, true, false);
+    Odometry odometry(left_mg, right_mg, side_encoder, imu_sensor, Config::WHEEL_BASE_WIDTH, Config::LATERAL_WHEEL_OFFSET, false, true);
+    
     RamseteController ramsete_controller(2.0, 0.7, 4.5 * 12, 5.0, 0.0254000508);
     DrivetrainController drive_controller(2.5, 1.85, 0.3, 9.0, 0.00, 0.0);
 

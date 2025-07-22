@@ -17,7 +17,12 @@
 #include "controllers/pid_controller.hpp"
 
 #include "navigation/odometry.hpp"
+#include "navigation/mcl.hpp"
+#include "navigation/i_localization.hpp"
+#include "navigation/localization_manager.hpp"
 #include "navigation/trajectory.hpp"
+#include "utilities/math/units.hpp"
+#include "utilities/math/angle.hpp"
 
 #include "utilities/logger.hpp"
 
@@ -33,14 +38,14 @@
 class Robot
 {
 private:
-    pros::MotorGroup *m_leftDrivetrain;      ///< Left side drivetrain motor group
-    pros::MotorGroup *m_rightDrivetrain;     ///< Right side drivetrain motor group
-    pros::Imu *m_inertial;                   ///< Right side drivetrain motor group
-    DrivetrainController *m_driveController; ///< Drivetrain velocity controller
-    RamseteController *m_ramseteController;  ///< Ramsete controller for trajectory following
-    Odometry *m_odometry;                    ///< Odometry system for position tracking
+    pros::MotorGroup *m_leftDrivetrain;                  ///< Left side drivetrain motor group
+    pros::MotorGroup *m_rightDrivetrain;                 ///< Right side drivetrain motor group
+    pros::Imu *m_inertial;                               ///< Right side drivetrain motor group
+    DrivetrainController *m_driveController;             ///< Drivetrain velocity controller
+    RamseteController *m_ramseteController;              ///< Ramsete controller for trajectory following
+    std::unique_ptr<LocalizationManager> m_localization; ///< Localization manager for managing localization systems
+    bool m_isFollowingTrajectory;                        ///< Flag indicating if trajectory following is active
 
-    bool m_isFollowingTrajectory; ///< Flag indicating if trajectory following is active
     /**
      * @brief Process an trajectory point from the trajectory
      * @param tp Trajectory point containing kinematic data

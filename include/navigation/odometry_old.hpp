@@ -1,28 +1,55 @@
 #ifndef ODOMETRY_H
 #define ODOMETRY_H
 
-#include "i_localization.hpp"
 #include "api.h"
 #include "filters/kalman_2d.hpp"
 #include "filters/heading_filter.hpp"
 #include "filters/slew_rate_limiter.hpp"
-#include "config.hpp"
 #include <cmath>
 #include <vector>
-#include <numeric>
-#include <utilities/logger.hpp>
-#include "utilities/math/units.hpp"
-#include "utilities/math/angle.hpp"
+#include <string>
+#include <utility>
 
 /**
- * @brief Odometry implementation of localization using wheel encoders and IMU
- *
- * Tracks robot position using advanced filtering techniques including Kalman filtering
- * and sensor fusion. Handles sensor validation, noise reduction, and uncertainty estimates.
+ * @brief Represents a 2D pose (position and orientation)
  */
-class Odometry : public ILocalization
+struct Pose
+{
+    double x;     ///< X position in inches
+    double y;     ///< Y position in inches
+    double theta; ///< Heading in radians
+
+    Pose(double x = 0, double y = 0, double theta = 0);
+};
+
+/**
+ * @brief Represents linear and angular velocity
+ */
+struct Velocity
+{
+    double linear;  ///< Linear velocity in inches/sec
+    double angular; ///< Angular velocity in rad/sec
+
+    Velocity(double linear = 0, double angular = 0);
+};
+
+/**
+ * @brief Advanced odometry system using Kalman filtering and sensor fusion
+ *
+ * Tracks robot position using wheel encoders, IMU, and advanced filtering techniques.
+ * Handles sensor validation, noise reduction, and provides uncertainty estimates.
+ */
+class Odometry
 {
 private:
+    // Constants
+    const double WHEEL_DIAMETER;
+    const double WHEEL_CIRCUMFERENCE;
+    const double GEAR_RATIO;
+    const double TICKS_PER_ROTATION;
+    const double MAX_VELOCITY_CHANGE;
+    const double MAX_ENCODER_DEVIATION;
+
     // Chassis measurements
     double track_width;
     double odom_wheel_offset;
@@ -34,6 +61,9 @@ private:
     pros::Imu &imu;
 
     // Filters
+    Kalman2D positionFilter;
+    // ExponentialFilter leftVelocityFilter;
+    // ExponentialFilter rightVelocityFilter;
     SlewRateLimiter leftVelocityLimiter;
     SlewRateLimiter rightVelocityLimiter;
     HeadingFilter headingFilter;
@@ -41,6 +71,7 @@ private:
     // Filter toggles
     bool useHeadingFilter;
     bool useVelocityFilters;
+    bool usePositionFilter;
 
     // State variables
     Pose currentPose;
@@ -79,11 +110,12 @@ public:
         double rightVelocityFiltered;
         double headingRaw;
         double headingFiltered;
+        std::vector<double> kalmanState;
         std::pair<double, double> uncertainty;
     };
 
     /**
-     * @brief Construct a new Odometry Localization object
+     * @brief Construct a new Odometry object
      *
      * @param left Left drive motors
      * @param right Right drive motors
@@ -93,41 +125,64 @@ public:
      * @param lateral_wheel_offset Distance from tracking center to lateral wheel
      * @param enable_heading_filter Enable heading filter
      * @param enable_velocity_filters Enable velocity filters
+     * @param enable_position_filter Enable position filter
      */
     Odometry(pros::MotorGroup &left, pros::MotorGroup &right,
              pros::Rotation &lateral, pros::Imu &imuSensor,
-             bool enable_heading_filter = false,
-             bool enable_velocity_filters = false);
+             double chassis_track_width, double lateral_wheel_offset,
+             bool enable_heading_filter,
+             bool enable_velocity_filters,
+             bool enable_position_filter);
 
-    // Implement core interface
-    void update() override;
-    void reset() override;
-    Pose getPose() const override;
-    void setPose(const Pose &newPose) override;
-    double getHeading() const override;
-    double getX() const override;
-    double getY() const override;
-    bool isReliable() const override;
-    double getTrackWidth() const override;
-    Velocity getLeftVelocity() const override;
-    Velocity getRightVelocity() const override;
+    /**
+     * @brief Reset odometry to initial state
+     */
+    void reset();
 
-    LocalizationType getType() const override { return LocalizationType::ODOMETRY; }
-    std::string getTypeName() const override { return "Odometry"; }
+    /**
+     * @brief Update odometry calculations
+     */
+    void update();
 
-    // Odometry-specific methods
+    // Getters and setters
+    Pose getPose() const;
+    Velocity getLeftVelocity() const;
+    Velocity getRightVelocity() const;
     Velocity getLeftAcceleration() const;
     Velocity getRightAcceleration() const;
-    double getAngularVelocity() const;
-    double getHeadingUncertainty() const;
+    double getHeading() const;
+    double getX() const;
+    double getY() const;
+    void setPose(const Pose &newPose);
     std::pair<double, double> getFilteredVelocities() const;
     std::pair<double, double> getPositionUncertainty() const;
-    void setFiltersEnabled(bool heading, bool velocity);
-    void disableSensor(const std::string &sensor);
-    DebugInfo getOdometryDebugInfo();
+    double getAngularVelocity() const;
+    double getHeadingUncertainty() const;
+    std::pair<double, double> getWheelOffsets() const;
+    void setWheelOffsets(double new_track_width, double new_lateral_offset);
+    double getTrackWidth() const;
+    DebugInfo getDebugInfo();
 
-    // Debug interface implementation
-    std::unordered_map<std::string, double> getDebugData() const override;
+    /**
+     * @brief Check if odometry readings are reliable
+     */
+    bool isReliable() const;
+
+    /**
+     * @brief Temporarily disable a specific sensor
+     *
+     * @param sensor Sensor to disable ("left", "right", or "lateral")
+     */
+    void disableSensor(const std::string &sensor);
+
+    /**
+     * @brief Set which filters are enabled
+     *
+     * @param heading Enable heading filter
+     * @param velocity Enable velocity filters
+     * @param position Enable position filter
+     */
+    void setFiltersEnabled(bool heading, bool velocity, bool position);
 };
 
 #endif // ODOMETRY_H
