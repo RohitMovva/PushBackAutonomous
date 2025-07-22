@@ -2,20 +2,19 @@
 
 // Robot config
 pros::Controller master(pros::E_CONTROLLER_MASTER);
-pros::MotorGroup left_mg({-15, -10, -18}); // Creates a motor group with forwards ports 1 & 3 and reversed port 2
-pros::MotorGroup right_mg({19, 16, 11});   // Creates a motor group with forwards port 5 and reversed ports 4 & 6
+pros::MotorGroup left_mg({-11, -12, -13}); // Creates a motor group with forwards ports 1 & 3 and reversed port 2
+pros::MotorGroup right_mg({20, 19, 18});   // Creates a motor group with forwards port 5 and reversed ports 4 & 6
+pros::Motor indexer(6);
+pros::Motor intake(9);
+pros::Motor top_intake(-10);
 
-Odometry odometry;
-DrivetrainController drive_controller;
-RamseteController ramsete_controller;
-Robot robot;
 Trajectory trajectory;
 
 pros::Imu imu_sensor(9);
 
 Logger *logger = Logger::getInstance();
 
-pros::Rotation side_encoder;
+pros::Rotation side_encoder(5);
 
 // Program types
 std::string program_type = "autonomous";
@@ -23,6 +22,15 @@ std::string program_type = "autonomous";
 // Routes
 std::vector<std::vector<double>> route;
 std::string route_name = "test2"; // used to be skills
+
+// Robot parameters (needs to be tweaked later)
+
+Odometry odometry;
+RamseteController ramsete_controller;
+DrivetrainController drive_controller;
+
+Robot robot;
+
 
 /**
  * Runs initialization code. This occurs as soon as the program is started.
@@ -41,7 +49,7 @@ void initialize()
 
     side_encoder.set_reversed(true);
 
-    Odometry odometry(left_mg, right_mg, side_encoder, imu_sensor, Config::WHEEL_BASE_WIDTH, Config::LATERAL_WHEEL_OFFSET, false, true);
+    Odometry odometry(left_mg, right_mg, side_encoder, imu_sensor, false, true);
     
     RamseteController ramsete_controller(2.0, 0.7, 4.5 * 12, 5.0, 0.0254000508);
     DrivetrainController drive_controller(2.5, 1.85, 0.3, 9.0, 0.00, 0.0);
@@ -122,12 +130,58 @@ int joystickCurve(int x, double a = 2.5)
  */
 void opcontrol()
 {
+    pros::lcd::print(0, "Program type: %s", program_type.c_str());
     while (true)
     {
         int dir = (master.get_analog(ANALOG_LEFT_Y));                // Gets amount forward/backward from left joystick
         int turn = joystickCurve(master.get_analog(ANALOG_RIGHT_X)); // Gets the turn left/right from right joystick
+        pros::lcd::print(1, "Left: %d, Right: %d", dir + turn, dir - turn);
         left_mg.move(dir + turn);                                    // Sets left motor voltage
         right_mg.move(dir - turn);                                   // Sets right motor voltage
+        
+        if (master.get_digital(DIGITAL_R1)) // If R1 is pressed
+        {
+            intake.move_velocity(12000); // Run intake at full speed
+            top_intake.move_velocity(-12000);
+            indexer.move_velocity(12000); // Run indexer at full speed
+        }
+        else if (master.get_digital(DIGITAL_R2)) // If R2 is pressed
+        {
+            intake.move_velocity(12000); // Run intake in reverse at full speed
+            indexer.move_voltage(-12000); // Run indexer in reverse at full speed
+            top_intake.move_voltage(12000); // Run top intake at full speed
+        }
+        else if (master.get_digital(DIGITAL_L1)) // If L1 is pressed
+        {
+            intake.move_voltage(-12000); // Run intake at full speed
+            top_intake.move_voltage(12000);
+            indexer.move_voltage(-12000); // Run indexer at full speed
+        }
+        else if (master.get_digital(DIGITAL_L2)) // If L2 is pressed
+        {
+            intake.move_voltage(-12000); // Run intake in reverse at full speed
+            indexer.move_voltage(-12000); // Run indexer in reverse at full speed
+            top_intake.move_voltage(12000); // Run top intake at full speed
+        }
+        else
+        {
+            intake.move_voltage(0); // Stop intake
+            top_intake.move_voltage(0); // Stop top intake
+            indexer.move_voltage(0); // Stop indexer
+        }
+
+        // if (master.get_digital(DIGITAL_L1)) // If L1 is pressed
+        // {
+        //     indexer.move_velocity(127); // Run indexer at full speed
+        // }
+        // else if (master.get_digital(DIGITAL_L2)) // If L2 is pressed
+        // {
+        //     indexer.move_velocity(-127); // Run indexer in reverse at full speed
+        // }
+        // else
+        // {
+        //     indexer.move_velocity(0); // Stop indexer
+        // }
 
         pros::delay(10); // Run for 10 ms then update
     }
