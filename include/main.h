@@ -86,7 +86,7 @@ extern "C"
 #include "hardware/robot.hpp"
 #include "utilities/logger.hpp"
 #include "utilities/math/units.hpp"
-#include "utilities/config.hpp"
+#include "config.hpp"
 #include <iostream>
 #include <fstream>
 #include <string>

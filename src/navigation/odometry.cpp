@@ -12,7 +12,7 @@ Odometry::Odometry(pros::MotorGroup &left, pros::MotorGroup &right,
 void Odometry::reset()
 {
     currentPose = Pose();
-    lastUpdateTime = pros::millis() / 1000.0;
+    lastUpdateTime = Units::millisecondsToSeconds(pros::millis());
 
     std::vector<double> leftPositions = leftDrive.get_position_all();
     std::vector<double> rightPositions = rightDrive.get_position_all();
@@ -34,12 +34,12 @@ void Odometry::reset()
 
 void Odometry::update()
 {
-    double currentTime = pros::millis() / 1000.0;
+    double currentTime = Units::millisecondsToSeconds(pros::millis());
     double deltaTime = currentTime - lastUpdateTime;
     if (deltaTime <= 0 || deltaTime > 0.1) // Avoid too small or too large time steps
     {
-        Logger::getInstance()->logWarning("Invalid deltaTime: %f, reverting to 10ms", deltaTime);
-        deltaTime = 0.01;
+        Logger::getInstance()->logWarning("Invalid deltaTime: %f, reverting to default", deltaTime);
+        deltaTime = Units::millisecondsToSeconds(Config::DT);
     }
 
     // Get filtered heading

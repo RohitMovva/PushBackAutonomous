@@ -183,6 +183,6 @@ void opcontrol()
         //     indexer.move_velocity(0); // Stop indexer
         // }
 
-        pros::delay(10); // Run for 10 ms then update
+        pros::delay(Config::DT);
     }
 }

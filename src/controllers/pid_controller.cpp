@@ -1,4 +1,6 @@
 #include "controllers/pid_controller.hpp"
+#include "utilities/math/units.hpp"
+#include "config.hpp"
 #include "utilities/logger.hpp"
 #include <algorithm>
 
@@ -25,11 +27,11 @@ double PIDController::calculate(double setpoint, double processVariable) {
 double PIDController::calculate(double error) {
     // Get current time and calculate delta
     uint32_t currentTime = pros::millis();
-    double dt = msToSeconds(currentTime - lastTime);
+    double dt = Units::millisecondsToSeconds(currentTime - lastTime);
     
     // Handle first run or invalid time step
     if (firstRun || dt <= 0) {
-        dt = MIN_DELTA_TIME;
+        dt = Units::millisecondsToSeconds(Config::DT);
         firstRun = false;
     }
     
@@ -105,8 +107,4 @@ void PIDController::setIntegralLimit(double integralLimit) {
 
 double PIDController::clamp(double value, double min, double max) {
     return std::clamp(value, min, max);
-}
-
-double PIDController::msToSeconds(uint32_t timeMs) {
-    return timeMs / 1000.0;
 }

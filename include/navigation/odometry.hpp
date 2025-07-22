@@ -10,7 +10,7 @@
 #include <cmath>
 #include <vector>
 #include <numeric>
-#include <utilities/logger.hpp>
+#include "utilities/logger.hpp"
 #include "utilities/math/units.hpp"
 #include "utilities/math/angle.hpp"
 

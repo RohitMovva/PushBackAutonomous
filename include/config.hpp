@@ -28,7 +28,7 @@ namespace Config {
     constexpr double RAMSETE_SCALE_FACTOR = 0.0254000508; ///< Scale factor for inputs and outputs (in relation to meters)
 
     // Miscellaneous constants
-    constexpr double DT = 0.01;                         ///< 10ms in seconds
+    constexpr double DT = 10;                         ///< 10ms in seconds
     constexpr bool VELOCITY_FILTER = true; ///< Enable velocity filter
     constexpr double VELOCITY_FILTER_ALPHA = 0.1; ///< Alpha value for velocity filter
     constexpr bool HEADING_FILTER = false; ///< Enable heading filter

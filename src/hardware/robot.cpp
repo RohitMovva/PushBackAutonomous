@@ -195,8 +195,6 @@ bool Robot::followTrajectory(Trajectory &trajectory)
     Logger::getInstance()->log("Following trajectory");
 
     const double START_TIME = pros::millis();
-    const double DT = 10;                     // 10ms
-    const double track_width = 14.1966209238; // inches
 
     size_t trajectory_index = 0;
     try
@@ -219,7 +217,6 @@ bool Robot::followTrajectory(Trajectory &trajectory)
     {
         pros::lcd::print(0, "Trajectory index: %d", trajectory_index);
         m_odometry->update();
-        const double current_time = pros::millis() - START_TIME;
 
         // Check if the current waypoint is a node instead of a trajectory point
         const DataPoint *point = trajectory.getNext();
@@ -232,7 +229,7 @@ bool Robot::followTrajectory(Trajectory &trajectory)
             } }, *point);
         trajectory_index++;
 
-        pros::delay(DT);
+        pros::delay(Config::DT);
     }
 
     // Stop motors
