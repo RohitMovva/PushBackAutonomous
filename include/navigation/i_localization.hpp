@@ -33,10 +33,7 @@ struct Velocity
 enum class LocalizationType 
 {
     ODOMETRY,
-    MONTE_CARLO,
-    PARTICLE_FILTER,
-    SENSOR_FUSION
-    // Add more as needed
+    MONTE_CARLO
 };
 
 /**

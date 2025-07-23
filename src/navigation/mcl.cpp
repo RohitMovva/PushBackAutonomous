@@ -1,5 +1,6 @@
 #include "navigation/mcl.hpp"
 #include "utilities/logger.hpp"
+#include "utilities/math/angle.hpp"
 #include <algorithm>
 #include <numeric>
 #include <cmath>
@@ -13,11 +14,9 @@ void Particle::predict(const Pose& motion, double motionNoise)
     
     pose.x += motion.x + noise(gen);
     pose.y += motion.y + noise(gen);
-    pose.theta += motion.theta + noise(gen);
+    pose.theta += motion.theta;
     
-    // Normalize angle
-    while (pose.theta > M_PI) pose.theta -= 2 * M_PI;
-    while (pose.theta < -M_PI) pose.theta += 2 * M_PI;
+    pose.theta = Angle::normalizeAngle(pose.theta);
 }
 
 void Particle::updateWeight(double likelihood)
@@ -28,10 +27,8 @@ void Particle::updateWeight(double likelihood)
 // MCL implementation
 MCL::MCL(pros::MotorGroup &left, pros::MotorGroup &right,
                                 pros::Rotation &lateral, pros::Imu &imuSensor,
-                                double chassis_track_width, double lateral_wheel_offset,
                                 int particle_count, double motion_noise_std)
     : numParticles(particle_count)
-    , track_width(chassis_track_width)
     , resampleThreshold(0.5)
     , confidence(0.0)
     , generator(randomDevice())
@@ -41,10 +38,9 @@ MCL::MCL(pros::MotorGroup &left, pros::MotorGroup &right,
     motionModel = std::make_unique<Odometry>(
         left, right, lateral, imuSensor,
         chassis_track_width, lateral_wheel_offset,
-        true, true, false  // Enable filters for better motion prediction
+        false, true  // Enable filters for better motion prediction
     );
     
-    initializeParticles();
     reset();
 }
 
@@ -53,18 +49,13 @@ void MCL::initializeParticles()
     particles.clear();
     particles.reserve(numParticles);
     
-    // Initialize particles uniformly around origin for now
-    // In a real implementation, you'd spread them across valid field positions
-    std::uniform_real_distribution<double> xDist(-24.0, 24.0);  // Field width in inches
-    std::uniform_real_distribution<double> yDist(-24.0, 24.0);  // Field height in inches
-    std::uniform_real_distribution<double> thetaDist(-M_PI, M_PI);
-    
     for (int i = 0; i < numParticles; ++i) {
+        // Just create particles that are empty
         particles.emplace_back(
-            xDist(generator),
-            yDist(generator), 
-            thetaDist(generator),
-            1.0 / numParticles  // Equal initial weights
+            0,
+            0, 
+            0,
+            1.0 / numParticles 
         );
     }
 }
@@ -79,8 +70,8 @@ void MCL::reset()
     if (motionModel) {
         motionModel->reset();
     }
-    
-    initializeParticles();
+
+    initializeParticles()
 }
 
 void MCL::update()
@@ -183,30 +174,29 @@ void MCL::resampleParticles()
 {
     std::vector<Particle> newParticles;
     newParticles.reserve(numParticles);
-    
+
     // Create cumulative distribution
     std::vector<double> cumulative(numParticles);
     cumulative[0] = particles[0].weight;
     for (size_t i = 1; i < particles.size(); ++i) {
         cumulative[i] = cumulative[i-1] + particles[i].weight;
     }
-    
+
     // Systematic resampling
     std::uniform_real_distribution<double> dist(0.0, 1.0);
-    double start = dist(generator) / numParticles;
-    
+    double start = dist(generator) * (1.0 / numParticles);
+    double step = 1.0 / numParticles;
+    size_t index = 0;
+
     for (int i = 0; i < numParticles; ++i) {
-        double sample = start + (double)i / numParticles;
-        
-        // Find particle to resample
-        auto it = std::lower_bound(cumulative.begin(), cumulative.end(), sample);
-        size_t index = it - cumulative.begin();
-        if (index >= particles.size()) index = particles.size() - 1;
-        
+        double sample = start + i * step;
+        while (index < cumulative.size() - 1 && sample > cumulative[index]) {
+            ++index;
+        }
         newParticles.push_back(particles[index]);
-        newParticles.back().weight = 1.0 / numParticles;  // Reset to uniform weight
+        newParticles.back().weight = 1.0 / numParticles;
     }
-    
+
     particles = std::move(newParticles);
 }
 
@@ -217,44 +207,38 @@ Pose MCL::estimatePoseFromParticles()
     // Weighted average of particle poses
     double totalWeight = 0.0;
     double x = 0.0, y = 0.0;
-    double cosTheta = 0.0, sinTheta = 0.0;
     
     for (const auto& particle : particles) {
         totalWeight += particle.weight;
         x += particle.pose.x * particle.weight;
         y += particle.pose.y * particle.weight;
-        cosTheta += cos(particle.pose.theta) * particle.weight;
-        sinTheta += sin(particle.pose.theta) * particle.weight;
     }
     
     if (totalWeight > 0.0) {
         x /= totalWeight;
         y /= totalWeight;
-        cosTheta /= totalWeight;
-        sinTheta /= totalWeight;
     }
     
-    double theta = atan2(sinTheta, cosTheta);
-    return Pose(x, y, theta);
+    return Pose(x, y, motionModel->getPose().theta);
 }
 
 // Core interface implementation
 Pose MCL::getPose() const { return estimatedPose; }
-void MCL::setPose(const Pose& newPose) { 
+void MCL::setPose(const Pose& newPose) {
     estimatedPose = newPose;
     
     // Reinitialize particles around new pose
     std::normal_distribution<double> xNoise(newPose.x, 1.0);
     std::normal_distribution<double> yNoise(newPose.y, 1.0);
-    std::normal_distribution<double> thetaNoise(newPose.theta, 0.1);
     
     for (auto& particle : particles) {
         particle.pose.x = xNoise(generator);
         particle.pose.y = yNoise(generator);
-        particle.pose.theta = thetaNoise(generator);
+        particle.pose.theta = newPose.theta;
         particle.weight = 1.0 / numParticles;
     }
 }
+
 double MCL::getHeading() const { return estimatedPose.theta; }
 double MCL::getX() const { return estimatedPose.x; }
 double MCL::getY() const { return estimatedPose.y; }

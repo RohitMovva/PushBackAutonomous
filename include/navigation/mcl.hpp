@@ -35,7 +35,6 @@ class MCL : public ILocalization
 private:
     // Configuration
     int numParticles;
-    double track_width;
     double resampleThreshold;
     
     // Particle filter state
@@ -61,7 +60,7 @@ private:
     // std::unique_ptr<VisionSensor> vision;
     
     // Helper methods
-    void initializeParticles();
+    void initializeParticles(Pose startingPose);
     void predictParticles();
     void updateParticlesWithSensors();
     void resampleParticles();
@@ -92,14 +91,11 @@ public:
      * @param right Right drive motors (for internal motion model)  
      * @param lateral Lateral tracking encoder (for internal motion model)
      * @param imuSensor IMU sensor (for internal motion model)
-     * @param chassis_track_width Distance between left and right wheels
-     * @param lateral_wheel_offset Distance from tracking center to lateral wheel
      * @param particle_count Number of particles to use
      * @param motion_noise_std Standard deviation of motion noise
      */
     MCL(pros::MotorGroup &left, pros::MotorGroup &right,
                    pros::Rotation &lateral, pros::Imu &imuSensor,
-                   double chassis_track_width, double lateral_wheel_offset,
                    int particle_count = 1000,
                    double motion_noise_std = 0.1);
 
