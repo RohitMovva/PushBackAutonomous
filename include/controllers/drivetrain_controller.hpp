@@ -2,6 +2,8 @@
 #define DRIVETRAIN_CONTROLLER_HPP
 
 #include "api.h"
+#include "config.hpp"
+#include "utilities/math/units.hpp"
 #include <cmath>
 
 /**

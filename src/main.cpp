@@ -1,7 +1,5 @@
 #include "main.h"
 
-// Global Vars
-
 // Robot config
 pros::Controller master(pros::E_CONTROLLER_MASTER);
 pros::MotorGroup left_mg({-11, -12, -13});
@@ -29,18 +27,11 @@ std::vector<std::vector<double>> route;
 std::string route_name = "test2"; // used to be skills
 
 // Robot parameters (needs to be tweaked later)
-const float WHEEL_DIAMETER = 2.75;             // Diameter of the wheels in inches
-const float TICKS_PER_ROTATION = 300.0;        // Encoder ticks per wheel rotation for blue cartridges
-const float GEAR_RATIO = 36.0 / 48.0;          // Gear ratio of the drivetrain
-const double WHEEL_BASE_WIDTH = 14.1966209238; // Distance between the left and right wheels in inches
-const float DT = 0.01;                         // 10ms in seconds
 
+RamseteController ramsete_controller;
+DrivetrainController drive_controller;
 
-Odometry odometry(left_mg, right_mg, side_encoder, imu_sensor, WHEEL_BASE_WIDTH, 2.419, false, true, false);
-RamseteController ramsete_controller(2.0, 0.7, 4.5 * 12, 5.0, 0.0254000508);
-DrivetrainController drive_controller(2.5, 1.85, 0.3, 9.0, 0.00, 0.0);
-
-Robot robot(&left_mg, &right_mg, &imu_sensor, &drive_controller, &ramsete_controller, &odometry);
+Robot robot;
 
 
 /**
@@ -62,6 +53,21 @@ void initialize()
     imu_sensor.reset();
 
     side_encoder.set_reversed(true);
+
+    // Create localization manager with odometry
+    auto localization = std::make_unique<LocalizationManager>(
+        LocalizationType::ODOMETRY,
+        left_mg, right_mg, side_encoder, imu_sensor, 
+        14.1966209238, 0.0,  // track width, lateral offset
+        false, true, false   // heading filter, velocity filter, position filter
+    );
+    
+    RamseteController ramsete_controller(2.0, 0.7, 4.5 * 12, 5.0, 0.0254000508);
+    DrivetrainController drive_controller(2.5, 1.85, 0.3, 9.0, 0.00, 0.0);
+
+    Robot robot(&left_mg, &right_mg, &imu_sensor, &drive_controller, &ramsete_controller, std::move(localization));
+
+    Trajectory trajectory;
     trajectory.loadFromFile("/usd/routes/" + route_name + ".txt");
     if (trajectory.empty())
     {
@@ -186,6 +192,6 @@ void opcontrol()
 
         little_will.input_toggle(master.get_digital(DIGITAL_A)); // Toggle little will on A button press
 
-        pros::delay(10); // Run for 10 ms then update
+        pros::delay(Config::DT);
     }
 }

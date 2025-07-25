@@ -2,7 +2,7 @@
 #include <stdexcept>
 
 Robot::Robot()
-    : m_leftDrivetrain(nullptr), m_rightDrivetrain(nullptr), m_inertial(nullptr), m_driveController(nullptr), m_ramseteController(nullptr), m_odometry(nullptr)
+    : m_leftDrivetrain(nullptr), m_rightDrivetrain(nullptr), m_inertial(nullptr), m_driveController(nullptr), m_ramseteController(nullptr), m_localization(nullptr), m_isFollowingTrajectory(false)
 {
     // Default constructor initializes all pointers to null
     // Robot will not be functional until proper initialization
@@ -13,8 +13,8 @@ Robot::Robot(pros::MotorGroup *leftDrivetrain,
              pros::Imu *inertial,
              DrivetrainController *driveController,
              RamseteController *ramseteController,
-             Odometry *odometry)
-    : m_leftDrivetrain(leftDrivetrain), m_rightDrivetrain(rightDrivetrain), m_inertial(inertial), m_driveController(driveController), m_ramseteController(ramseteController), m_odometry(odometry)
+             std::unique_ptr<LocalizationManager> localization)
+    : m_leftDrivetrain(leftDrivetrain), m_rightDrivetrain(rightDrivetrain), m_inertial(inertial), m_driveController(driveController), m_ramseteController(ramseteController), m_localization(std::move(localization)), m_isFollowingTrajectory(false)
 {
     // Validate all pointer parameters
     if (!leftDrivetrain)
@@ -37,9 +37,9 @@ Robot::Robot(pros::MotorGroup *leftDrivetrain,
     {
         throw std::invalid_argument("Ramsete controller pointer cannot be null");
     }
-    if (!odometry)
+    if (!m_localization)
     {
-        throw std::invalid_argument("Odometry pointer cannot be null");
+        throw std::invalid_argument("Localization manager cannot be null");
     }
 }
 
@@ -51,8 +51,9 @@ Robot::~Robot()
         stopTrajectory();
     }
 
-    // Note: We don't delete the pointers as this class doesn't own them
-    // The calling code is responsible for managing the lifetime of these objects
+    // Note: We don't delete the raw pointers as this class doesn't own them
+    // The LocalizationManager is automatically cleaned up via unique_ptr
+    // The calling code is responsible for managing the lifetime of other objects
 }
 
 bool Robot::isFollowingTrajectory() const
@@ -81,21 +82,21 @@ void Robot::stopTrajectory()
     }
 }
 
-auto Robot::getCurrentPosition() const -> decltype(m_odometry->getPose())
+auto Robot::getCurrentPosition() const -> decltype(m_localization->getPose())
 {
-    if (!m_odometry)
+    if (!m_localization)
     {
-        throw std::runtime_error("Odometry system not initialized");
+        throw std::runtime_error("Localization system not initialized");
     }
 
-    return m_odometry->getPose();
+    return m_localization->getPose();
 }
 
 void Robot::resetPosition(const Pose &position)
 {
-    if (!m_odometry)
+    if (!m_localization)
     {
-        throw std::runtime_error("Odometry system not initialized");
+        throw std::runtime_error("Localization system not initialized");
     }
 
     // Stop any active trajectory following before resetting position
@@ -104,7 +105,7 @@ void Robot::resetPosition(const Pose &position)
         stopTrajectory();
     }
 
-    m_odometry->setPose(position);
+    m_localization->setPose(position);
 }
 
 bool Robot::isInitialized() const
@@ -114,20 +115,21 @@ bool Robot::isInitialized() const
             m_inertial != nullptr &&
             m_driveController != nullptr &&
             m_ramseteController != nullptr &&
-            m_odometry != nullptr);
+            m_localization != nullptr &&
+            m_localization->isInitialized());
 }
 
 void Robot::processTrajectory(const TrajectoryPoint &tp)
 {
     // Process trajectory
-    Pose current_pose = m_odometry->getPose();
+    Pose current_pose = m_localization->getPose();
 
     Logger::getInstance()->log("Pose: %f %f %f", current_pose.x, current_pose.y, current_pose.theta);
     Logger::getInstance()->log("Goal: %f %f %f", tp.x, tp.y, tp.theta);
 
     // Calculate accelerations using next waypoint
-    double left_accel = tp.linear_accel - (tp.angular_accel * m_odometry->getTrackWidth() / 2.0);
-    double right_accel = tp.linear_accel + (tp.angular_accel * m_odometry->getTrackWidth() / 2.0);
+    double left_accel = tp.linear_accel - (tp.angular_accel * m_localization->getTrackWidth() / 2.0);
+    double right_accel = tp.linear_accel + (tp.angular_accel * m_localization->getTrackWidth() / 2.0);
 
     // Get RAMSETE controller output
     auto ramsete_output = m_ramseteController->calculate(
@@ -137,25 +139,25 @@ void Robot::processTrajectory(const TrajectoryPoint &tp)
     Logger::getInstance()->log("Ramsete Output: %f %f", ramsete_output[0], ramsete_output[1]);
     Logger::getInstance()->log("MP Output: %f %f", tp.linear_vel, tp.angular_vel);
 
-    // Convert RAMSETE output to wheel velocities
+    // Convert RAMSETE output to wheel velocities using configuration
     auto wheel_velocities = m_ramseteController->calculate_wheel_velocities(
-        ramsete_output[0],          // linear velocity
-        ramsete_output[1],          // angular velocity
-        2.75,                       // wheel diameter (inches)
-        48.0 / 36.0,                // gear ratio
-        m_odometry->getTrackWidth() // track width (inches)
+        ramsete_output[0],              // linear velocity
+        ramsete_output[1],              // angular velocity
+        Config::WHEEL_DIAMETER,         // wheel diameter from config
+        Config::GEAR_RATIO,             // gear ratio from config
+        m_localization->getTrackWidth() // track width from localization
     );
-    Logger::getInstance()->log("Left wheel velocities: %f %f", wheel_velocities[0], m_odometry->getLeftVelocity().linear);
-    Logger::getInstance()->log("Right wheel velocities: %f %f", wheel_velocities[1], m_odometry->getRightVelocity().linear);
+    Logger::getInstance()->log("Left wheel velocities: %f %f", wheel_velocities[0], m_localization->getLeftVelocity().linear);
+    Logger::getInstance()->log("Right wheel velocities: %f %f", wheel_velocities[1], m_localization->getRightVelocity().linear);
 
     // Calculate motor voltages using drivetrain controller
     auto voltages = m_driveController->calculateVoltages(
-        wheel_velocities[0],                   // left velocity setpoint
-        wheel_velocities[1],                   // right velocity setpoint
-        m_odometry->getLeftVelocity().linear,  // current left velocity
-        m_odometry->getRightVelocity().linear, // current right velocity
-        left_accel,                            // left acceleration
-        right_accel                            // right acceleration
+        wheel_velocities[0],                       // left velocity setpoint
+        wheel_velocities[1],                       // right velocity setpoint
+        m_localization->getLeftVelocity().linear,  // current left velocity
+        m_localization->getRightVelocity().linear, // current right velocity
+        left_accel,                                // left acceleration
+        right_accel                                // right acceleration
     );
     Logger::getInstance()->log("Voltages: %d %d", voltages.left, voltages.right);
 
@@ -192,11 +194,10 @@ bool Robot::followTrajectory(Trajectory &trajectory)
     // Set the flag to indicate we are following a trajectory
     m_isFollowingTrajectory = true;
 
-    Logger::getInstance()->log("Following trajectory");
+    Logger::getInstance()->log("Following trajectory with %s localization",
+                               m_localization->getCurrentTypeName().c_str());
 
     const double START_TIME = pros::millis();
-    const double DT = 10;                     // 10ms
-    const double track_width = 14.1966209238; // inches
 
     size_t trajectory_index = 0;
     try
@@ -209,19 +210,20 @@ bool Robot::followTrajectory(Trajectory &trajectory)
     }
     catch (const std::bad_variant_access &e)
     {
-        Logger::getInstance()->logError("Error: Second point is not an TrajectoryPoint!");
+        Logger::getInstance()->logError("Error: Second point is not a TrajectoryPoint!");
     }
 
     // Main control loop
     Logger::getInstance()->log("Route size: %d", trajectory.size());
 
-    while (trajectory.hasNext())
+    while (trajectory.hasNext() && m_isFollowingTrajectory)
     {
         pros::lcd::print(0, "Trajectory index: %d", trajectory_index);
-        m_odometry->update();
-        const double current_time = pros::millis() - START_TIME;
 
-        // Check if the current waypoint is a node instead of a trajectory point
+        // Update localization
+        m_localization->update();
+
+        // Check if the current waypoint is a trajectory point or action point
         const DataPoint *point = trajectory.getNext();
         std::visit([this](const auto &p)
                    {
@@ -230,9 +232,11 @@ bool Robot::followTrajectory(Trajectory &trajectory)
             } else {
                 this->processAction(p);
             } }, *point);
+
         trajectory_index++;
 
-        pros::delay(DT);
+        // Use delta time from configuration
+        pros::delay(Config::DT); // Convert to milliseconds
     }
 
     // Stop motors
@@ -241,5 +245,6 @@ bool Robot::followTrajectory(Trajectory &trajectory)
 
     m_isFollowingTrajectory = false;
 
-    return true; // Indicate that trajectory following has started successfully
+    Logger::getInstance()->log("Trajectory following completed");
+    return true; // Indicate that trajectory following completed successfully
 }

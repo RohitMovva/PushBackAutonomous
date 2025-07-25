@@ -33,8 +33,8 @@ DrivetrainController::MotorVoltages DrivetrainController::calculateVoltages(
 {
     // Get current time and calculate delta
     uint32_t currentTime = pros::millis();
-    double dt = (currentTime - prevTime) / 1000.0;
-    if (dt <= 0) dt = 0.025;  // Default to 25ms
+    double dt = Units::millisecondsToSeconds(currentTime - prevTime);
+    if (dt <= 0) dt = Units::millisecondsToSeconds(Config::DT);
 
     // Calculate errors in ticks/sec
     double leftVelocityError = leftVelocitySetpoint - leftVelocityActual;

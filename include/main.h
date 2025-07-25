@@ -85,6 +85,8 @@ extern "C"
 #include "hardware/enhanced_digital_out.hpp"
 #include "hardware/robot.hpp"
 #include "utilities/logger.hpp"
+#include "utilities/math/units.hpp"
+#include "config.hpp"
 #include <iostream>
 #include <fstream>
 #include <string>
