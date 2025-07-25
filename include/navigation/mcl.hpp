@@ -3,25 +3,11 @@
 
 #include "navigation/i_localization.hpp"
 #include "navigation/odometry.hpp"
+#include "hardware/distance.hpp"
 #include "api.h"
 #include <memory>
 #include <vector>
 #include <random>
-
-/**
- * @brief Particle structure for Monte Carlo Localization
- */
-struct Particle
-{
-    Pose pose;
-    double weight;
-    
-    Particle(double x = 0, double y = 0, double theta = 0, double w = 1.0)
-        : pose(x, y, theta), weight(w) {}
-        
-    void predict(const Pose& motion, double motionNoise);
-    void updateWeight(double likelihood);
-};
 
 /**
  * @brief Monte Carlo Localization implementation
@@ -53,14 +39,13 @@ private:
     std::random_device randomDevice;
     std::mt19937 generator;
     std::normal_distribution<double> motionNoise;
-    
-    // Sensor integration (placeholders for future implementation)
-    // std::unique_ptr<LidarSensor> lidar;
-    // std::unique_ptr<FieldMap> fieldMap;
-    // std::unique_ptr<VisionSensor> vision;
+
+    // Sensors
+    pros::IMU* imuSensor;
+    std::vector<Distance>& distanceSensors;
     
     // Helper methods
-    void initializeParticles(Pose startingPose);
+    void initializeParticles();
     void predictParticles();
     void updateParticlesWithSensors();
     void resampleParticles();
@@ -96,7 +81,7 @@ public:
      */
     MCL(pros::MotorGroup &left, pros::MotorGroup &right,
                    pros::Rotation &lateral, pros::Imu &imuSensor,
-                   int particle_count = 1000,
+                   std::vector<Distance>& distanceSensors, int particle_count = 1000,
                    double motion_noise_std = 0.1);
 
     // Implement core interface

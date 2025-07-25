@@ -16,7 +16,7 @@ void Particle::predict(const Pose& motion, double motionNoise)
     pose.y += motion.y + noise(gen);
     pose.theta += motion.theta;
     
-    pose.theta = Angle::normalizeAngle(pose.theta);
+    pose.theta = Angles::normalizeAngle(pose.theta);
 }
 
 void Particle::updateWeight(double likelihood)
@@ -27,17 +27,19 @@ void Particle::updateWeight(double likelihood)
 // MCL implementation
 MCL::MCL(pros::MotorGroup &left, pros::MotorGroup &right,
                                 pros::Rotation &lateral, pros::Imu &imuSensor,
+                                std::vector<Distance>& distanceSensors,
                                 int particle_count, double motion_noise_std)
     : numParticles(particle_count)
     , resampleThreshold(0.5)
     , confidence(0.0)
     , generator(randomDevice())
     , motionNoise(0.0, motion_noise_std)
+    , imuSensor(imuSensor)
+    , distanceSensors(distanceSensors) // Initialize to nullptr, will be set later if needed
 {
     // Create internal motion model for particle prediction
     motionModel = std::make_unique<Odometry>(
         left, right, lateral, imuSensor,
-        chassis_track_width, lateral_wheel_offset,
         false, true  // Enable filters for better motion prediction
     );
     
@@ -71,12 +73,11 @@ void MCL::reset()
         motionModel->reset();
     }
 
-    initializeParticles()
+    initializeParticles();
 }
 
 void MCL::update()
 {
-    // 1. Update motion model
     if (motionModel) {
         motionModel->update();
         
@@ -85,10 +86,8 @@ void MCL::update()
         rightVelocity = motionModel->getRightVelocity();
     }
     
-    // 2. Predict particles using motion model
     predictParticles();
     
-    // 3. Update particles with sensor observations
     updateParticlesWithSensors();
     
     // 4. Resample if needed
@@ -219,7 +218,7 @@ Pose MCL::estimatePoseFromParticles()
         y /= totalWeight;
     }
     
-    return Pose(x, y, motionModel->getPose().theta);
+    return Pose(x, y, Angles::normalizeAngle(this->imuSensor->get_heading()));
 }
 
 // Core interface implementation
@@ -242,7 +241,6 @@ void MCL::setPose(const Pose& newPose) {
 double MCL::getHeading() const { return estimatedPose.theta; }
 double MCL::getX() const { return estimatedPose.x; }
 double MCL::getY() const { return estimatedPose.y; }
-double MCL::getTrackWidth() const { return track_width; }
 Velocity MCL::getLeftVelocity() const { return leftVelocity; }
 Velocity MCL::getRightVelocity() const { return rightVelocity; }
 
@@ -306,7 +304,6 @@ std::unordered_map<std::string, double> MCL::getDebugData() const
     debug["motion_noise_std"] = motionNoise.stddev();
     debug["resample_threshold"] = resampleThreshold;
     debug["reliable"] = isReliable() ? 1.0 : 0.0;
-    debug["track_width"] = track_width;
     debug["left_velocity"] = leftVelocity.linear;
     debug["right_velocity"] = rightVelocity.linear;
     

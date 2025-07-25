@@ -4,6 +4,22 @@
 #include <string>
 #include <unordered_map>
 
+
+/**
+ * @brief Particle structure for Monte Carlo Localization
+ */
+struct Particle
+{
+    Pose pose;
+    double weight;
+    
+    Particle(double x = 0, double y = 0, double theta = 0, double w = 1.0)
+        : pose(x, y, theta), weight(w) {}
+        
+    void predict(const Pose& motion, double motionNoise);
+    void updateWeight(double likelihood);
+};
+
 /**
  * @brief Represents a 2D pose (position and orientation)
  */
