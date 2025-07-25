@@ -5,7 +5,9 @@ void Trajectory::loadFromFile(const std::string &filepath)
     std::ifstream file(filepath);
     if (!file.is_open())
     {
-        throw std::runtime_error("Failed to open file: " + filepath);
+        // SD Card not in
+        return;
+        // throw std::runtime_error("Failed to open file: " + filepath);
     }
 
     dataset.clear();

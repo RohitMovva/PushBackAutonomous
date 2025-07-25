@@ -163,9 +163,9 @@ def plot_data(vel_df, volt_df, plot_integral=False):
 if __name__ == "__main__":
     # Make sure to install mplcursors if not already installed
     # You can install it using: pip install mplcursors
-    
-    vel_df, volt_df = parse_data('robot_log_19700101_000000.txt')
-    
+
+    vel_df, volt_df = parse_data('../logs/square.txt')
+
     # Create both velocity and integral plots with voltage
     plot_data(vel_df, volt_df, plot_integral=False)  # Velocity plot
     plot_data(vel_df, volt_df, plot_integral=True)   # Distance plot
