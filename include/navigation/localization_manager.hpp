@@ -8,6 +8,7 @@
 // Forward declarations to avoid circular includes
 class OdometryLocalization;
 class MCLLocalization;
+class OdometryReset;
 
 /**
  * @brief Localization manager that handles switching between implementations
@@ -23,6 +24,9 @@ private:
     // Factory methods for different implementations
     template<typename... Args>
     std::unique_ptr<ILocalization> createOdometry(Args&&... args);
+
+    template<typename... Args>
+    std::unique_ptr<ILocalization> createOdometryReset(Args&&... args);
     
     template<typename... Args>
     std::unique_ptr<ILocalization> createMCL(Args&&... args);
@@ -111,10 +115,12 @@ bool LocalizationManager::switchTo(LocalizationType type, Args&&... args)
         case LocalizationType::ODOMETRY:
             newLocalization = createOdometry(std::forward<Args>(args)...);
             break;
+        case LocalizationType::DISTANCE_RESET_ODOMETRY:
+            newLocalization = createOdometryReset(std::forward<Args>(args)...);
+            break;
         case LocalizationType::MONTE_CARLO:
             newLocalization = createMCL(std::forward<Args>(args)...);
             break;
-        // Add more cases as needed
         default:
             return false;
     }
@@ -131,6 +137,12 @@ template<typename... Args>
 std::unique_ptr<ILocalization> LocalizationManager::createOdometry(Args&&... args)
 {
     return std::make_unique<OdometryLocalization>(std::forward<Args>(args)...);
+}
+
+template<typename... Args>
+std::unique_ptr<ILocalization> LocalizationManager::createOdometryReset(Args&&... args)
+{
+    return std::make_unique<OdometryReset>(std::forward<Args>(args)...);
 }
 
 template<typename... Args>

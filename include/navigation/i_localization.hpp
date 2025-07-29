@@ -4,6 +4,17 @@
 #include <string>
 #include <unordered_map>
 
+/**
+ * @brief Represents a 2D pose (position and orientation)
+ */
+struct Pose
+{
+    double x;     ///< X position in inches
+    double y;     ///< Y position in inches
+    double theta; ///< Heading in radians
+
+    Pose(double x = 0, double y = 0, double theta = 0) : x(x), y(y), theta(theta) {}
+};
 
 /**
  * @brief Particle structure for Monte Carlo Localization
@@ -18,18 +29,6 @@ struct Particle
         
     void predict(const Pose& motion, double motionNoise);
     void updateWeight(double likelihood);
-};
-
-/**
- * @brief Represents a 2D pose (position and orientation)
- */
-struct Pose
-{
-    double x;     ///< X position in inches
-    double y;     ///< Y position in inches
-    double theta; ///< Heading in radians
-
-    Pose(double x = 0, double y = 0, double theta = 0) : x(x), y(y), theta(theta) {}
 };
 
 /**
@@ -49,6 +48,7 @@ struct Velocity
 enum class LocalizationType 
 {
     ODOMETRY,
+    DISTANCE_RESET_ODOMETRY,
     MONTE_CARLO
 };
 

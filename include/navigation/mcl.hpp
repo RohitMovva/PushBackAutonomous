@@ -41,7 +41,7 @@ private:
     std::normal_distribution<double> motionNoise;
 
     // Sensors
-    pros::IMU* imuSensor;
+    pros::IMU& IMU;
     std::vector<Distance>& distanceSensors;
     
     // Helper methods

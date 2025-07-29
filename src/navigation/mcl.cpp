@@ -26,7 +26,7 @@ void Particle::updateWeight(double likelihood)
 
 // MCL implementation
 MCL::MCL(pros::MotorGroup &left, pros::MotorGroup &right,
-                                pros::Rotation &lateral, pros::Imu &imuSensor,
+                                pros::Rotation &lateral, pros::Imu &IMU,
                                 std::vector<Distance>& distanceSensors,
                                 int particle_count, double motion_noise_std)
     : numParticles(particle_count)
@@ -34,12 +34,12 @@ MCL::MCL(pros::MotorGroup &left, pros::MotorGroup &right,
     , confidence(0.0)
     , generator(randomDevice())
     , motionNoise(0.0, motion_noise_std)
-    , imuSensor(imuSensor)
+    , IMU(IMU)
     , distanceSensors(distanceSensors) // Initialize to nullptr, will be set later if needed
 {
     // Create internal motion model for particle prediction
     motionModel = std::make_unique<Odometry>(
-        left, right, lateral, imuSensor,
+        left, right, lateral, IMU,
         false, true  // Enable filters for better motion prediction
     );
     
@@ -218,7 +218,7 @@ Pose MCL::estimatePoseFromParticles()
         y /= totalWeight;
     }
     
-    return Pose(x, y, Angles::normalizeAngle(this->imuSensor->get_heading()));
+    return Pose(x, y, Angles::normalizeAngle(this->IMU.get_heading()));
 }
 
 // Core interface implementation
