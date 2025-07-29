@@ -48,6 +48,7 @@ struct Velocity
 enum class LocalizationType 
 {
     ODOMETRY,
+    DISTANCE_RESET_ODOMETRY,
     MONTE_CARLO
 };
 

@@ -3,6 +3,7 @@
 
 #include "navigation/i_localization.hpp"
 #include "utilities/math/angle.hpp"
+#include "utilities/math/math.hpp"
 #include "api.h"
 // #include "navigation/mcl.hpp"
 
@@ -61,19 +62,20 @@ class Distance {
 
             double predicted = 50.0;
 
-            if (abs(Angles::angleDifference(0, sensorPose.theta)) < M_PI_2) {
-                // If the sensor is facing the same direction as the particle
-                predicted = (WALL_0_X - sensorPose.x) / std::cos(sensorPose.theta);
-            } else if (abs(Angles::angleDifference(M_PI_4, sensorPose.theta)) < M_PI_2) {
-                // If the sensor is facing the opposite direction
-                predicted = (WALL_1_Y + sensorPose.x) / std::cos(sensorPose.theta);
-            } else if (abs(Angles::angleDifference(M_PI_2, sensorPose.theta)) < M_PI_2) {
-                // If the sensor is facing 90 degrees to the right
-                predicted = (WALL_2_X - sensorPose.y) / std::sin(sensorPose.theta);
-            } else if (abs(Angles::angleDifference(M_3PI_4, sensorPose.theta)) < M_PI_2) {
-                // If the sensor is facing 90 degrees to the left
-                predicted = (WALL_3_Y + sensorPose.y) / std::sin(sensorPose.theta);
+            if (const auto theta = abs(Angles::angleDifference(0, sensorPose.theta)); theta < M_PI_2) {
+                // 45 degrees on either side of 0 degrees
+                predicted = (WALL_0_X - sensorPose.x) / std::cos(theta);
+            } else if (const auto theta = abs(Angles::angleDifference(M_PI_2, sensorPose.theta)); theta < M_PI_2) {
+                // 45 degrees on either side of 90 degrees
+                predicted = (WALL_1_Y - sensorPose.x) / std::cos(theta);
+            } else if (const auto theta = abs(Angles::angleDifference(M_PI, sensorPose.theta)); theta < M_PI_2) {
+                // 45 degrees on either side of 180 degrees
+                predicted = (WALL_2_X - sensorPose.y) / std::sin(theta);
+            } else if (const auto theta = abs(Angles::angleDifference(-1*M_PI_2, sensorPose.theta)); theta < M_PI_2) {
+                // 45 degrees on either side of 270 degrees
+                predicted = (WALL_3_Y - sensorPose.y) / std::sin(theta);
             }
+            return Math::normalPDF((getDistance() - predicted) / tuningFactor);
         }
 };
 
