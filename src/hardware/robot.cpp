@@ -13,7 +13,7 @@ Robot::Robot(pros::MotorGroup *leftDrivetrain,
              pros::Imu *inertial,
              DrivetrainController *driveController,
              RamseteController *ramseteController,
-             std::unique_ptr<LocalizationManager> localization)
+             std::unique_ptr<ILocalization> localization)
     : m_leftDrivetrain(leftDrivetrain), m_rightDrivetrain(rightDrivetrain), m_inertial(inertial), m_driveController(driveController), m_ramseteController(ramseteController), m_localization(std::move(localization)), m_isFollowingTrajectory(false)
 {
     // Validate all pointer parameters
@@ -39,7 +39,7 @@ Robot::Robot(pros::MotorGroup *leftDrivetrain,
     }
     if (!m_localization)
     {
-        throw std::invalid_argument("Localization manager cannot be null");
+        throw std::invalid_argument("Localization object cannot be null");
     }
 }
 
@@ -52,7 +52,7 @@ Robot::~Robot()
     }
 
     // Note: We don't delete the raw pointers as this class doesn't own them
-    // The LocalizationManager is automatically cleaned up via unique_ptr
+    // The localization object is automatically cleaned up via unique_ptr
     // The calling code is responsible for managing the lifetime of other objects
 }
 
@@ -115,8 +115,7 @@ bool Robot::isInitialized() const
             m_inertial != nullptr &&
             m_driveController != nullptr &&
             m_ramseteController != nullptr &&
-            m_localization != nullptr &&
-            m_localization->isInitialized());
+            m_localization != nullptr);
 }
 
 void Robot::processTrajectory(const TrajectoryPoint &tp)
@@ -128,8 +127,8 @@ void Robot::processTrajectory(const TrajectoryPoint &tp)
     Logger::getInstance()->log("Goal: %f %f %f", tp.x, tp.y, tp.theta);
 
     // Calculate accelerations using next waypoint
-    double left_accel = tp.linear_accel - (tp.angular_accel * m_localization->getTrackWidth() / 2.0);
-    double right_accel = tp.linear_accel + (tp.angular_accel * m_localization->getTrackWidth() / 2.0);
+    double left_accel = tp.linear_accel - (tp.angular_accel * Config::WHEEL_BASE_WIDTH / 2.0);
+    double right_accel = tp.linear_accel + (tp.angular_accel * Config::WHEEL_BASE_WIDTH / 2.0);
 
     // Get RAMSETE controller output
     auto ramsete_output = m_ramseteController->calculate(
@@ -145,7 +144,7 @@ void Robot::processTrajectory(const TrajectoryPoint &tp)
         ramsete_output[1],              // angular velocity
         Config::WHEEL_DIAMETER,         // wheel diameter from config
         Config::GEAR_RATIO,             // gear ratio from config
-        m_localization->getTrackWidth() // track width from localization
+        Config::WHEEL_BASE_WIDTH        // track width from config
     );
     Logger::getInstance()->log("Left wheel velocities: %f %f", wheel_velocities[0], m_localization->getLeftVelocity().linear);
     Logger::getInstance()->log("Right wheel velocities: %f %f", wheel_velocities[1], m_localization->getRightVelocity().linear);
@@ -182,12 +181,15 @@ void Robot::processAction(const ActionPoint &ap)
 
 bool Robot::followTrajectory(Trajectory &trajectory)
 {
+    Logger::getInstance()->log("Starting trajectory following");
     if (!isInitialized())
     {
-        return false; // Cannot follow trajectory if robot is not initialized
+        Logger::getInstance()->logError("Robot is not initialized, cannot follow trajectory");
+        return false;
     }
     if (trajectory.empty())
     {
+        Logger::getInstance()->logError("Trajectory is empty, cannot follow");
         return false;
     }
 
@@ -195,7 +197,7 @@ bool Robot::followTrajectory(Trajectory &trajectory)
     m_isFollowingTrajectory = true;
 
     Logger::getInstance()->log("Following trajectory with %s localization",
-                               m_localization->getCurrentTypeName().c_str());
+                               m_localization->getTypeName().c_str());
 
     const double START_TIME = pros::millis();
 
@@ -215,10 +217,11 @@ bool Robot::followTrajectory(Trajectory &trajectory)
 
     // Main control loop
     Logger::getInstance()->log("Route size: %d", trajectory.size());
+    Logger::getInstance()->log("Has next: %d", trajectory.hasNext());
 
-    while (trajectory.hasNext() && m_isFollowingTrajectory)
+    while (trajectory.hasNext())
     {
-        pros::lcd::print(0, "Trajectory index: %d", trajectory_index);
+        Logger::getInstance()->log("Processing trajectory point %zu", trajectory_index);
 
         // Update localization
         m_localization->update();

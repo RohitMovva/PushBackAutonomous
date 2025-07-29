@@ -2,6 +2,7 @@
 #define DISTANCE_H
 
 #include "navigation/i_localization.hpp"
+#include "utilities/math/angle.hpp"
 #include "api.h"
 // #include "navigation/mcl.hpp"
 

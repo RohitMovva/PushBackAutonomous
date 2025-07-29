@@ -95,7 +95,7 @@ def plot_positions(times, left_avgs, right_avgs):
 
 if __name__ == "__main__":
     import sys
-    log_file_path = 'robot_log_19700101_000000.txt'
+    log_file_path = 'default.txt'
     
     try:
         times, left_avgs, right_avgs = analyze_log_file(log_file_path)

@@ -2,141 +2,117 @@
 #define LOCALIZATION_MANAGER_H
 
 #include "navigation/i_localization.hpp"
+#include "utilities/logger.hpp"
 #include <memory>
 #include <string>
 
 // Forward declarations to avoid circular includes
-class OdometryLocalization;
-class MCLLocalization;
+class Odometry;
+class MCL;
 
 /**
- * @brief Localization manager that handles switching between implementations
+ * @brief Localization factory that creates localization implementations
  * 
- * Provides a unified interface for different localization methods while allowing
- * runtime switching with state preservation. Acts as a Strategy pattern coordinator.
+ * Provides factory methods for creating different localization implementations.
+ * Acts as a Factory pattern for localization objects.
  */
 class LocalizationManager
 {
 private:
-    std::unique_ptr<ILocalization> localization;
-    
     // Factory methods for different implementations
     template<typename... Args>
-    std::unique_ptr<ILocalization> createOdometry(Args&&... args);
+    static std::unique_ptr<ILocalization> createOdometry(Args&&... args);
     
     template<typename... Args>
-    std::unique_ptr<ILocalization> createMCL(Args&&... args);
+    static std::unique_ptr<ILocalization> createMCL(Args&&... args);
     
 public:
     /**
-     * @brief Default constructor - creates uninitialized manager
-     */
-    LocalizationManager() = default;
-    
-    /**
-     * @brief Constructor that creates the specified localization type
-     * @param type The type of localization to use
+     * @brief Create a localization implementation of the specified type
+     * @param type The type of localization to create
      * @param args Arguments specific to the localization implementation
+     * @return Unique pointer to the created localization object, or nullptr if creation failed
      */
     template<typename... Args>
-    LocalizationManager(LocalizationType type, Args&&... args)
-    {
-        switchTo(type, std::forward<Args>(args)...);
-    }
+    static std::unique_ptr<ILocalization> create(LocalizationType type, Args&&... args);
     
     /**
-     * @brief Switch localization implementation with state preservation
+     * @brief Create a localization implementation and transfer state from existing one
      * @param type New localization type
+     * @param existingLocalization Existing localization to preserve state from
      * @param args Constructor arguments for the new implementation
-     * @return true if switch was successful, false otherwise
+     * @return Unique pointer to the created localization object with preserved state
      */
     template<typename... Args>
-    bool switchTo(LocalizationType type, Args&&... args);
+    static std::unique_ptr<ILocalization> createWithStateTransfer(
+        LocalizationType type, 
+        const ILocalization* existingLocalization,
+        Args&&... args);
     
     /**
-     * @brief Check if manager has been initialized
+     * @brief Get the type name as string for debugging
+     * @param type The localization type
+     * @return String representation of the type
      */
-    bool isInitialized() const { return localization != nullptr; }
-    
-    // Convenience methods that delegate to current implementation
-    // These match exactly what your Robot class expects
-    void update();
-    void reset();
-    Pose getPose() const;
-    void setPose(const Pose& pose);
-    double getHeading() const;
-    double getX() const;
-    double getY() const;
-    double getTrackWidth() const;
-    Velocity getLeftVelocity() const;
-    Velocity getRightVelocity() const;
-    bool isReliable() const;
-    
-    // Access to underlying implementation for specific features
-    ILocalization* getImplementation() const { return localization.get(); }
-    
-    // Type checking
-    LocalizationType getCurrentType() const;
-    std::string getCurrentTypeName() const;
-    
-    // Debug data access
-    std::unordered_map<std::string, double> getDebugData() const;
+    static std::string getTypeName(LocalizationType type);
     
     /**
-     * @brief Cast to specific implementation type for accessing specific methods
-     * @tparam T The specific localization type to cast to
-     * @return Pointer to the specific type, or nullptr if cast fails
+     * @brief Check if a type is supported
+     * @param type The localization type to check
+     * @return true if the type can be created, false otherwise
      */
-    template<typename T>
-    T* getAs() const
-    {
-        return dynamic_cast<T*>(localization.get());
-    }
+    static bool isTypeSupported(LocalizationType type);
 };
 
 // Template implementation (must be in header for template instantiation)
 template<typename... Args>
-bool LocalizationManager::switchTo(LocalizationType type, Args&&... args)
+std::unique_ptr<ILocalization> LocalizationManager::create(LocalizationType type, Args&&... args)
 {
-    // Preserve current pose if switching
-    Pose currentPose;
-    if (localization) {
-        currentPose = localization->getPose();
-    }
-    
-    // Create new implementation
-    std::unique_ptr<ILocalization> newLocalization;
-    
     switch (type) {
         case LocalizationType::ODOMETRY:
-            newLocalization = createOdometry(std::forward<Args>(args)...);
-            break;
+            return createOdometry(std::forward<Args>(args)...);
         case LocalizationType::MONTE_CARLO:
-            newLocalization = createMCL(std::forward<Args>(args)...);
-            break;
-        // Add more cases as needed
+            return createMCL(std::forward<Args>(args)...);
         default:
-            return false;
+            return nullptr;
+    }
+}
+
+template<typename... Args>
+std::unique_ptr<ILocalization> LocalizationManager::createWithStateTransfer(
+    LocalizationType type, 
+    const ILocalization* existingLocalization,
+    Args&&... args)
+{
+    // Create new implementation
+    auto newLocalization = create(type, std::forward<Args>(args)...);
+    
+    // Transfer state if both objects exist
+    if (newLocalization && existingLocalization) {
+        newLocalization->setPose(existingLocalization->getPose());
     }
     
-    if (newLocalization) {
-        localization = std::move(newLocalization);
-        localization->setPose(currentPose);
-        return true;
-    }
-    return false;
+    return newLocalization;
 }
 
 template<typename... Args>
 std::unique_ptr<ILocalization> LocalizationManager::createOdometry(Args&&... args)
-{
-    return std::make_unique<OdometryLocalization>(std::forward<Args>(args)...);
+{   
+    if constexpr (std::is_constructible_v<Odometry, Args...>) {
+        return std::make_unique<Odometry>(std::forward<Args>(args)...);
+    } else {
+        return nullptr;
+    }
 }
 
 template<typename... Args>
 std::unique_ptr<ILocalization> LocalizationManager::createMCL(Args&&... args)
 {
-    return std::make_unique<MCLLocalization>(std::forward<Args>(args)...);
+    if constexpr (std::is_constructible_v<MCL, Args...>) {
+        return std::make_unique<MCL>(std::forward<Args>(args)...);
+    } else {
+        return nullptr;
+    }
 }
 
 #endif // LOCALIZATION_MANAGER_H

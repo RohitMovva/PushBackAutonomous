@@ -41,7 +41,7 @@
      pros::Imu *m_inertial;                               ///< Inertial sensor for heading and orientation
      DrivetrainController *m_driveController;             ///< Drivetrain velocity controller
      RamseteController *m_ramseteController;              ///< Ramsete controller for trajectory following
-     std::unique_ptr<LocalizationManager> m_localization; ///< Localization manager for managing localization systems
+     std::unique_ptr<ILocalization> m_localization; ///< Localization manager for managing localization systems
      bool m_isFollowingTrajectory;                        ///< Flag indicating if trajectory following is active
  
      /**
@@ -73,7 +73,7 @@
       * @param inertial Pointer to inertial sensor for heading and orientation
       * @param driveController Pointer to drivetrain velocity controller
       * @param ramseteController Pointer to Ramsete controller for path following
-      * @param localization Unique pointer to localization manager
+      * @param localization Unique pointer to localization interface
       *
       * @pre All pointer parameters must be valid and properly initialized
       * @post Robot is fully initialized and ready for autonomous operation
@@ -85,7 +85,7 @@
            pros::Imu *inertial,
            DrivetrainController *driveController,
            RamseteController *ramseteController,
-           std::unique_ptr<LocalizationManager> localization);
+           std::unique_ptr<ILocalization> localization);
  
      /**
       * @brief Destructor for Robot class
@@ -155,26 +155,6 @@
       * @return true if all required systems are initialized, false otherwise
       */
      bool isInitialized() const;
- 
-     /**
-      * @brief Get access to the localization manager for advanced operations
-      * @return Pointer to the localization manager
-      */
-     LocalizationManager* getLocalization() const { return m_localization.get(); }
- 
-     /**
-      * @brief Switch localization implementation at runtime
-      * @param type New localization type to switch to
-      * @param args Constructor arguments for the new localization
-      * @return true if switch was successful
-      */
-     template<typename... Args>
-     bool switchLocalizationType(LocalizationType type, Args&&... args) {
-         if (m_localization) {
-             return m_localization->switchTo(type, std::forward<Args>(args)...);
-         }
-         return false;
-     }
  
      // Disable copy constructor and assignment operator
      Robot(const Robot &) = delete;

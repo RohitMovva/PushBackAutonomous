@@ -5,8 +5,8 @@ pros::Controller master(pros::E_CONTROLLER_MASTER);
 pros::MotorGroup left_mg({-11, -12, -13});
 pros::MotorGroup right_mg({20, 19, 18});
 pros::Motor indexer(6);
-pros::Motor intake(9);
-pros::Motor top_intake(-10);
+pros::Motor intake(10);
+pros::Motor top_intake(-9);
 
 EnhancedDigitalOut little_will(8, false);
 EnhancedDigitalOut trapdoor(7, false);
@@ -26,12 +26,10 @@ std::string program_type = "autonomous";
 std::vector<std::vector<double>> route;
 std::string route_name = "test2"; // used to be skills
 
-// Robot parameters (needs to be tweaked later)
+RamseteController* ramsete_controller;
+DrivetrainController* drive_controller;
 
-RamseteController ramsete_controller;
-DrivetrainController drive_controller;
-
-Robot robot;
+Robot* robot;
 
 
 /**
@@ -55,19 +53,18 @@ void initialize()
     side_encoder.set_reversed(true);
 
     // Create localization manager with odometry
-    auto localization = std::make_unique<LocalizationManager>(
+    auto localization = LocalizationManager::create(
         LocalizationType::ODOMETRY,
         left_mg, right_mg, side_encoder, imu_sensor, 
-        14.1966209238, 0.0,  // track width, lateral offset
-        false, true, false   // heading filter, velocity filter, position filter
+        false, true   // heading filter, velocity filter, position filter
     );
+    // logger->log("Localization init: %s",  ? "Success" : "Failed");
     
-    RamseteController ramsete_controller(2.0, 0.7, 4.5 * 12, 5.0, 0.0254000508);
-    DrivetrainController drive_controller(2.5, 1.85, 0.3, 9.0, 0.00, 0.0);
+    ramsete_controller = new RamseteController(2.0, 0.7, 4.5 * 12, 5.0, 0.0254000508);
+    drive_controller = new DrivetrainController(2.5, 1.85, 0.3, 9.0, 0.00, 0.0);
 
-    Robot robot(&left_mg, &right_mg, &imu_sensor, &drive_controller, &ramsete_controller, std::move(localization));
+    robot = new Robot(&left_mg, &right_mg, &imu_sensor, drive_controller, ramsete_controller, std::move(localization));
 
-    Trajectory trajectory;
     trajectory.loadFromFile("/usd/routes/" + route_name + ".txt");
     if (trajectory.empty())
     {
@@ -115,10 +112,9 @@ void autonomous()
 
     if (program_type == "autonomous")
     {
-        // logger->log()
         logger->log("Starting autonomous");
 
-        robot.followTrajectory(trajectory);
+        robot->followTrajectory(trajectory);
     }
 }
 

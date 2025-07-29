@@ -13,7 +13,7 @@ goal_theta = []
 timestamps = []
 
 # Read and parse the log file
-with open('../logs/square.txt', 'r') as file: # robot_log_19700101_000000.txt
+with open('../logs/default.txt', 'r') as file: # robot_log_19700101_000000.txt
     t = 0
     for line in file:
         if 'Pose:' in line:

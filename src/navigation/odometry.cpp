@@ -179,12 +179,12 @@ bool Odometry::isReliable() const
 // Helper function implementations
 double Odometry::ticksToInches(double ticks)
 {
-    return Units::ticksToDistance(ticks, Config::TICKS_PER_ROTATION, Config::WHEEL_CIRCUMFERENCE, Config::GEAR_RATIO);
+    return Units::ticksToDistance(ticks, Config::TICKS_PER_ROTATION, Config::WHEEL_DIAMETER, Config::GEAR_RATIO);
 }
 
 double Odometry::latTicksToInches(int ticks)
 {
-    return Units::ticksToDistance(ticks, Units::Constants::V5_ROTATION_SENSOR_TICKS_PER_ROTATION, Config::WHEEL_CIRCUMFERENCE, Units::Constants::GEAR_RATIO_1_1);
+    return Units::ticksToDistance(ticks, Units::Constants::V5_ROTATION_SENSOR_TICKS_PER_ROTATION, Config::WHEEL_DIAMETER, Units::Constants::GEAR_RATIO_1_1);
 }
 
 double Odometry::getAveragePosition(const std::vector<double> &positions)

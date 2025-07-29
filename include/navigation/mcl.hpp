@@ -41,7 +41,7 @@ private:
     std::normal_distribution<double> motionNoise;
 
     // Sensors
-    pros::IMU* imuSensor;
+    pros::IMU& imuSensor;
     std::vector<Distance>& distanceSensors;
     
     // Helper methods
@@ -93,7 +93,6 @@ public:
     double getX() const override;
     double getY() const override;
     bool isReliable() const override;
-    double getTrackWidth() const override;
     Velocity getLeftVelocity() const override;
     Velocity getRightVelocity() const override;
     

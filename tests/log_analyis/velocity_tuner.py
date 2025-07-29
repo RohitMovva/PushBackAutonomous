@@ -21,9 +21,10 @@ def parse_data(filename):
     # Read and parse the file
     with open(filename, 'r') as file:
         for line in file:
+            # Updated regex patterns to handle type specifiers like [LOG], [INFO], [ERROR]
             # Extract timestamp and velocities
-            vel_match = re.match(r'\[(\d+:\d+:\d+\.\d+)\] Right wheel velocities: ([-\d.]+) ([-\d.]+)', line)
-            volt_match = re.match(r'\[(\d+:\d+:\d+\.\d+)\] Voltages: ([-\d.]+) ([-\d.]+)', line)
+            vel_match = re.match(r'\[(\d+:\d+:\d+\.\d+)\] \[(?:LOG|INFO|ERROR|WARN|DEBUG)\] Right wheel velocities: ([-\d.]+) ([-\d.]+)', line)
+            volt_match = re.match(r'\[(\d+:\d+:\d+\.\d+)\] \[(?:LOG|INFO|ERROR|WARN|DEBUG)\] Voltages: ([-\d.]+) ([-\d.]+)', line)
             
             if vel_match:
                 vel_data['timestamp'].append(vel_match.group(1))
@@ -164,7 +165,7 @@ if __name__ == "__main__":
     # Make sure to install mplcursors if not already installed
     # You can install it using: pip install mplcursors
 
-    vel_df, volt_df = parse_data('../logs/square.txt')
+    vel_df, volt_df = parse_data('../logs/default.txt')
 
     # Create both velocity and integral plots with voltage
     plot_data(vel_df, volt_df, plot_integral=False)  # Velocity plot

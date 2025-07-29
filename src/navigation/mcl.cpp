@@ -218,7 +218,7 @@ Pose MCL::estimatePoseFromParticles()
         y /= totalWeight;
     }
     
-    return Pose(x, y, Angles::normalizeAngle(this->imuSensor->get_heading()));
+    return Pose(x, y, Angles::normalizeAngle(this->imuSensor.get_heading()));
 }
 
 // Core interface implementation
