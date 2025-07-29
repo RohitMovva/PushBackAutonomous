@@ -2,14 +2,12 @@
 #define LOCALIZATION_MANAGER_H
 
 #include "navigation/i_localization.hpp"
+#include "navigation/odometry.hpp"
+#include "navigation/mcl.hpp"
+#include "navigation/odometry_reset.hpp"
 #include "utilities/logger.hpp"
 #include <memory>
 #include <string>
-
-// Forward declarations to avoid circular includes
-class OdometryLocalization;
-class MCLLocalization;
-class OdometryReset;
 
 /**
  * @brief Localization factory that creates localization implementations
@@ -22,10 +20,10 @@ class LocalizationManager
 private:
     // Factory methods for different implementations
     template<typename... Args>
-    std::unique_ptr<ILocalization> createOdometry(Args&&... args);
+    static std::unique_ptr<ILocalization> createOdometry(Args&&... args);
 
     template<typename... Args>
-    std::unique_ptr<ILocalization> createOdometryReset(Args&&... args);
+    static std::unique_ptr<ILocalization> createOdometryReset(Args&&... args);
     
     template<typename... Args>
     static std::unique_ptr<ILocalization> createMCL(Args&&... args);
@@ -74,14 +72,11 @@ std::unique_ptr<ILocalization> LocalizationManager::create(LocalizationType type
 {
     switch (type) {
         case LocalizationType::ODOMETRY:
-            newLocalization = createOdometry(std::forward<Args>(args)...);
-            break;
+            return createOdometry(std::forward<Args>(args)...);
         case LocalizationType::DISTANCE_RESET_ODOMETRY:
-            newLocalization = createOdometryReset(std::forward<Args>(args)...);
-            break;
+            return createOdometryReset(std::forward<Args>(args)...);
         case LocalizationType::MONTE_CARLO:
-            newLocalization = createMCL(std::forward<Args>(args)...);
-            break;
+            return createMCL(std::forward<Args>(args)...);
         default:
             return nullptr;
     }
@@ -117,7 +112,11 @@ std::unique_ptr<ILocalization> LocalizationManager::createOdometry(Args&&... arg
 template<typename... Args>
 std::unique_ptr<ILocalization> LocalizationManager::createOdometryReset(Args&&... args)
 {
-    return std::make_unique<OdometryReset>(std::forward<Args>(args)...);
+    if constexpr (std::is_constructible_v<OdometryReset, Args...>) {
+        return std::make_unique<OdometryReset>(std::forward<Args>(args)...);
+    } else {
+        return nullptr;
+    }
 }
 
 template<typename... Args>
