@@ -2,15 +2,18 @@
 
 // Robot config
 pros::Controller master(pros::E_CONTROLLER_MASTER);
-pros::MotorGroup left_mg({-11, -12, -13}); // Creates a motor group with forwards ports 1 & 3 and reversed port 2
-pros::MotorGroup right_mg({20, 19, 18});   // Creates a motor group with forwards port 5 and reversed ports 4 & 6
+pros::MotorGroup left_mg({-11, -12, -13});
+pros::MotorGroup right_mg({20, 19, 18});
 pros::Motor indexer(6);
 pros::Motor intake(9);
 pros::Motor top_intake(-10);
 
+EnhancedDigitalOut little_will(8, false);
+EnhancedDigitalOut trapdoor(7, false);
+
 Trajectory trajectory;
 
-pros::Imu imu_sensor(9);
+pros::Imu imu_sensor(4);
 
 Logger *logger = Logger::getInstance();
 
@@ -42,6 +45,9 @@ void initialize()
 
     left_mg.set_encoder_units_all(pros::E_MOTOR_ENCODER_COUNTS);
     right_mg.set_encoder_units_all(pros::E_MOTOR_ENCODER_COUNTS);
+
+    left_mg.tare_position_all();
+    right_mg.tare_position_all();
 
     // Calibrate the inertial sensor
     imu_sensor.reset();
@@ -109,6 +115,7 @@ void autonomous()
 
     if (program_type == "autonomous")
     {
+        // logger->log()
         logger->log("Starting autonomous");
 
         robot.followTrajectory(trajectory);
@@ -144,29 +151,37 @@ void opcontrol()
         left_mg.move(dir + turn);                                    // Sets left motor voltage
         right_mg.move(dir - turn);                                   // Sets right motor voltage
         
-        if (master.get_digital(DIGITAL_R1)) // If R1 is pressed
+        if (master.get_digital(DIGITAL_R1)) // Intake into basket
         {
             intake.move_velocity(12000); // Run intake at full speed
             top_intake.move_velocity(-12000);
             indexer.move_velocity(12000); // Run indexer at full speed
+            if (trapdoor.get_state())
+            {
+                trapdoor.toggle();
+            }
         }
-        else if (master.get_digital(DIGITAL_R2)) // If R2 is pressed
+        else if (master.get_digital(DIGITAL_R2)) // Outake to middle goal
         {
             intake.move_velocity(12000); // Run intake in reverse at full speed
+            top_intake.move_voltage(1500); // Run top intake at full speed
             indexer.move_voltage(-12000); // Run indexer in reverse at full speed
-            top_intake.move_voltage(12000); // Run top intake at full speed
         }
-        else if (master.get_digital(DIGITAL_L1)) // If L1 is pressed
+        else if (master.get_digital(DIGITAL_L1)) // Outake into low goal
         {
             intake.move_voltage(-12000); // Run intake at full speed
             top_intake.move_voltage(12000);
             indexer.move_voltage(-12000); // Run indexer at full speed
         }
-        else if (master.get_digital(DIGITAL_L2)) // If L2 is pressed
+        else if (master.get_digital(DIGITAL_L2)) // Outake to high goal
         {
-            intake.move_voltage(-12000); // Run intake in reverse at full speed
+            intake.move_voltage(12000); // Run intake in reverse at full speed
             indexer.move_voltage(-12000); // Run indexer in reverse at full speed
-            top_intake.move_voltage(12000); // Run top intake at full speed
+            top_intake.move_voltage(-12000); // Run top intake at full speed
+            if (!trapdoor.get_state())
+            {
+                trapdoor.toggle();
+            }
         }
         else
         {
@@ -175,18 +190,7 @@ void opcontrol()
             indexer.move_voltage(0); // Stop indexer
         }
 
-        // if (master.get_digital(DIGITAL_L1)) // If L1 is pressed
-        // {
-        //     indexer.move_velocity(127); // Run indexer at full speed
-        // }
-        // else if (master.get_digital(DIGITAL_L2)) // If L2 is pressed
-        // {
-        //     indexer.move_velocity(-127); // Run indexer in reverse at full speed
-        // }
-        // else
-        // {
-        //     indexer.move_velocity(0); // Stop indexer
-        // }
+        little_will.input_toggle(master.get_digital(DIGITAL_A)); // Toggle little will on A button press
 
         pros::delay(Config::DT);
     }

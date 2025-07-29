@@ -22,7 +22,7 @@ def timestamp_to_seconds(timestamp):
     return dt.hour * 3600 + dt.minute * 60 + dt.second + dt.microsecond/1000000
 
 # Read and parse the log file
-with open('robot_log_19700101_000000.txt', 'r') as file:
+with open('../logs/square.txt', 'r') as file:
     for line in file:
         # Extract timestamp
         time_match = time_pattern.search(line)

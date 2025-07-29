@@ -13,25 +13,25 @@ goal_theta = []
 timestamps = []
 
 # Read and parse the log file
-with open('robot_log_19700101_000000.txt', 'r') as file:
+with open('../logs/square.txt', 'r') as file: # robot_log_19700101_000000.txt
     t = 0
     for line in file:
         if 'Pose:' in line:
             t += 0.025  # Assuming 25ms between each line
             # Extract pose data (actual position)
             parts = line.split()
-            actual_x.append(float(parts[2]))
-            actual_y.append(float(parts[3]))
-            actual_theta.append(float(parts[4]))
+            actual_x.append(float(parts[3]))
+            actual_y.append(float(parts[4]))
+            actual_theta.append(float(parts[5]))
             # Extract timestamp
             time_str = parts[0][1:-1]  # Remove brackets
             timestamps.append(t)
         elif 'Goal:' in line:
             # Extract goal data
             parts = line.split()
-            goal_x.append(float(parts[2]))
-            goal_y.append(float(parts[3]))
-            goal_theta.append(float(parts[4]))
+            goal_x.append(float(parts[3]))
+            goal_y.append(float(parts[4]))
+            goal_theta.append(float(parts[5]))
 
 # Convert lists to numpy arrays
 actual_x = np.array(actual_x)
