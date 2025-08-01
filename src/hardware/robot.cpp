@@ -1,4 +1,7 @@
 #include "hardware/robot.hpp"
+#include "controllers/pid_controller.hpp"
+#include "utilities/math/units.hpp"
+#include "utilities/math/angle.hpp"
 #include <stdexcept>
 
 Robot::Robot()
@@ -250,4 +253,50 @@ bool Robot::followTrajectory(Trajectory &trajectory)
 
     Logger::getInstance()->log("Trajectory following completed");
     return true; // Indicate that trajectory following completed successfully
+}
+
+void Robot::tuneTrackWidth()
+{
+    PIDController(2.0, 0.0, 0.0, -127.0, 127.0, 50.0);
+    Logger::getInstance()->log("Track width tuning started");
+
+    double heading = Angles::degreesToRadians(m_inertial->get_heading() * -1);
+
+    double target_heading = Angles::degreesToRadians(heading + 180.0);
+
+    double left_arc_length = 0.0;
+    double right_arc_length = 0.0;
+    Logger::getInstance()->log("heading: %f", heading);
+    Logger::getInstance()->log("Target heading: %f", target_heading);
+
+    while (abs(Angles::angleDifference(target_heading, heading)) > 0.1)
+    {
+        // Get current heading
+        heading = Angles::degreesToRadians(m_inertial->get_heading() * -1);
+        Logger::getInstance()->log("Current heading: %f", heading);
+
+        // Calculate error
+        double error = Angles::angleDifference(target_heading, heading);
+
+        // Calculate control output
+        double output = 100.0 * error; // Proportional control
+
+        // Apply output to motors
+        m_leftDrivetrain->move(-output);
+        m_rightDrivetrain->move(output);
+
+        pros::delay(10);
+    }
+
+    Logger::getInstance()->log("Track width tuning completed");
+    m_leftDrivetrain->move(0);
+    m_rightDrivetrain->move(0);
+
+    left_arc_length = Units::ticksToDistance(m_leftDrivetrain->get_position(), Config::TICKS_PER_ROTATION, Config::WHEEL_DIAMETER, Config::GEAR_RATIO);
+    right_arc_length = Units::ticksToDistance(m_rightDrivetrain->get_position(), Config::TICKS_PER_ROTATION, Config::WHEEL_DIAMETER, Config::GEAR_RATIO);
+
+    Logger::getInstance()->log("Left arc length: %f", left_arc_length);
+    Logger::getInstance()->log("Right arc length: %f", right_arc_length);
+
+
 }

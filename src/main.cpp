@@ -114,7 +114,8 @@ void autonomous()
     {
         logger->log("Starting autonomous");
 
-        robot->followTrajectory(trajectory);
+        // robot->followTrajectory(trajectory);
+        robot->tuneTrackWidth();
     }
 }
 

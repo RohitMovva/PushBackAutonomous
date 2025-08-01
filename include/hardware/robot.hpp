@@ -155,6 +155,12 @@
       * @return true if all required systems are initialized, false otherwise
       */
      bool isInitialized() const;
+
+     /**
+      * @brief Tune track width for the robot
+      */
+
+      void tuneTrackWidth();
  
      // Disable copy constructor and assignment operator
      Robot(const Robot &) = delete;
