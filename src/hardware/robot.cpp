@@ -16,8 +16,13 @@ Robot::Robot(pros::MotorGroup *leftDrivetrain,
              pros::Imu *inertial,
              DrivetrainController *driveController,
              RamseteController *ramseteController,
-             std::unique_ptr<ILocalization> localization)
-    : m_leftDrivetrain(leftDrivetrain), m_rightDrivetrain(rightDrivetrain), m_inertial(inertial), m_driveController(driveController), m_ramseteController(ramseteController), m_localization(std::move(localization)), m_isFollowingTrajectory(false)
+             std::unique_ptr<ILocalization> localization,
+             EnhancedDigitalOut *littleWill,
+             EnhancedDigitalOut *trapdoor,
+             pros::Motor *indexer,
+             pros::Motor *intake,
+             pros::Motor *top_intake)
+    : m_leftDrivetrain(leftDrivetrain), m_rightDrivetrain(rightDrivetrain), m_inertial(inertial), m_driveController(driveController), m_ramseteController(ramseteController), m_localization(std::move(localization)), m_isFollowingTrajectory(false), little_will(littleWill), trapdoor(trapdoor), indexer(indexer), intake(intake), top_intake(top_intake)
 {
     // Validate all pointer parameters
     if (!leftDrivetrain)
@@ -179,7 +184,49 @@ void Robot::processAction(const ActionPoint &ap)
         Logger::getInstance()->log("Action: %f", action);
     }
 
-    // TODO: Implement action processing logic after bot is built
+    if (ap.actions.size() > 0) // Example action check
+    {
+        if (ap.actions[0] == 1.0)
+        {
+            intake->move_velocity(12000); // Run intake at full speed
+            top_intake->move_velocity(-12000);
+            indexer->move_velocity(12000); // Run indexer at full speed
+            if (trapdoor->get_state())
+            {
+                trapdoor->toggle();
+            }
+        }
+        else if (ap.actions[0] == 2.0) // Outake to middle goal
+        {
+            intake->move_velocity(12000); // Run intake in reverse at full speed
+            top_intake->move_voltage(1500); // Run top intake at full speed
+            indexer->move_voltage(-12000); // Run indexer in reverse at full speed
+        }
+        else if (ap.actions[0] == 3.0) // Outake into low goal
+        {
+            intake->move_voltage(-12000); // Run intake at full speed
+            top_intake->move_voltage(12000);
+            indexer->move_voltage(-12000); // Run indexer at full speed
+        }
+        else if (ap.actions[0] == 4.0) // Outake to high goal
+        {
+            intake->move_voltage(12000); // Run intake in reverse at full speed
+            indexer->move_voltage(-12000); // Run indexer in reverse at full speed
+            top_intake->move_voltage(-12000); // Run top intake at full speed
+            if (!trapdoor->get_state())
+            {
+                trapdoor->toggle();
+            }
+        } else {
+            intake->move_voltage(0);
+            top_intake->move_voltage(0);
+            indexer->move_voltage(0);
+        }
+    }
+    else if (ap.actions.size() > 1 && ap.actions[1] == 1.0) // Example action check for little will
+    {
+        // Toggle little will
+    }
 }
 
 bool Robot::followTrajectory(Trajectory &trajectory)
@@ -202,7 +249,8 @@ bool Robot::followTrajectory(Trajectory &trajectory)
     Logger::getInstance()->log("Following trajectory with %s localization",
                                m_localization->getTypeName().c_str());
 
-    const double START_TIME = pros::millis();
+    uint32_t loop_start_time = pros::millis();
+
 
     size_t trajectory_index = 0;
     try
@@ -242,7 +290,8 @@ bool Robot::followTrajectory(Trajectory &trajectory)
         trajectory_index++;
 
         // Use delta time from configuration
-        pros::delay(Config::DT); // Convert to milliseconds
+        pros::Task::delay_until(&loop_start_time, Config::DT); // Convert to milliseconds
+        loop_start_time = pros::millis(); // Update loop start time for next iteration
     }
 
     // Stop motors
@@ -257,7 +306,7 @@ bool Robot::followTrajectory(Trajectory &trajectory)
 
 void Robot::tuneTrackWidth()
 {
-    PIDController(2.0, 0.0, 0.0, -127.0, 127.0, 50.0);
+    PIDController controller = PIDController(200.0, 25.0, 20.0, -127.0, 127.0, 50.0);
     Logger::getInstance()->log("Track width tuning started");
 
     double heading = Angles::degreesToRadians(m_inertial->get_heading() * -1);
@@ -266,11 +315,22 @@ void Robot::tuneTrackWidth()
 
     double left_arc_length = 0.0;
     double right_arc_length = 0.0;
+    int success_count = 0;
     Logger::getInstance()->log("heading: %f", heading);
     Logger::getInstance()->log("Target heading: %f", target_heading);
 
-    while (abs(Angles::angleDifference(target_heading, heading)) > 0.1)
+    while (success_count < 3)
     {
+        Logger::getInstance()->log("Angle difference: %f", Angles::angleDifference(target_heading, heading));
+        if (fabs(Angles::angleDifference(target_heading, heading)) > 0.03)
+        {
+            success_count = 0; // Reset success count if we are not close enough
+        }
+        else
+        {
+            success_count++;
+        }
+        Logger::getInstance()->log("success count: %d", success_count);
         // Get current heading
         heading = Angles::degreesToRadians(m_inertial->get_heading() * -1);
         Logger::getInstance()->log("Current heading: %f", heading);
@@ -279,7 +339,7 @@ void Robot::tuneTrackWidth()
         double error = Angles::angleDifference(target_heading, heading);
 
         // Calculate control output
-        double output = 100.0 * error; // Proportional control
+        double output = controller.calculate(error);
 
         // Apply output to motors
         m_leftDrivetrain->move(-output);
@@ -297,6 +357,4 @@ void Robot::tuneTrackWidth()
 
     Logger::getInstance()->log("Left arc length: %f", left_arc_length);
     Logger::getInstance()->log("Right arc length: %f", right_arc_length);
-
-
 }
