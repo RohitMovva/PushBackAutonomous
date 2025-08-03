@@ -24,7 +24,7 @@ std::string program_type = "autonomous";
 
 // Routes
 std::vector<std::vector<double>> route;
-std::string route_name = "test2"; // used to be skills
+std::string route_name = "sawp"; // used to be skills
 
 RamseteController* ramsete_controller;
 DrivetrainController* drive_controller;
@@ -61,9 +61,10 @@ void initialize()
     // logger->log("Localization init: %s",  ? "Success" : "Failed");
     
     ramsete_controller = new RamseteController(2.0, 0.7, 4.5 * 12, 5.0, 0.0254000508);
-    drive_controller = new DrivetrainController(2.5, 1.85, 0.3, 9.0, 0.00, 0.0);
+    drive_controller = new DrivetrainController(2.5, 1.85, 0.3, 3.0, 0.00, 0.0);
 
-    robot = new Robot(&left_mg, &right_mg, &imu_sensor, drive_controller, ramsete_controller, std::move(localization));
+    robot = new Robot(&left_mg, &right_mg, &imu_sensor, drive_controller, ramsete_controller, std::move(localization), 
+                      &little_will, &trapdoor, &indexer, &intake, &top_intake);
 
     trajectory.loadFromFile("/usd/routes/" + route_name + ".txt");
     if (trajectory.empty())
@@ -114,8 +115,8 @@ void autonomous()
     {
         logger->log("Starting autonomous");
 
-        // robot->followTrajectory(trajectory);
-        robot->tuneTrackWidth();
+        robot->followTrajectory(trajectory);
+        // robot->tuneTrackWidth();
     }
 }
 
