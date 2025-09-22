@@ -2,6 +2,7 @@
 #include "controllers/pid_controller.hpp"
 #include "utilities/math/units.hpp"
 #include "utilities/math/angle.hpp"
+#include "navigation/distance_reset_odometry.hpp"
 #include <stdexcept>
 
 Robot::Robot()
@@ -18,11 +19,8 @@ Robot::Robot(pros::MotorGroup *leftDrivetrain,
              RamseteController *ramseteController,
              std::unique_ptr<ILocalization> localization,
              EnhancedDigitalOut *littleWill,
-             EnhancedDigitalOut *trapdoor,
-             pros::Motor *indexer,
-             pros::Motor *intake,
-             pros::Motor *top_intake)
-    : m_leftDrivetrain(leftDrivetrain), m_rightDrivetrain(rightDrivetrain), m_inertial(inertial), m_driveController(driveController), m_ramseteController(ramseteController), m_localization(std::move(localization)), m_isFollowingTrajectory(false), little_will(littleWill), trapdoor(trapdoor), indexer(indexer), intake(intake), top_intake(top_intake)
+             Intake *intake)
+    : m_leftDrivetrain(leftDrivetrain), m_rightDrivetrain(rightDrivetrain), m_inertial(inertial), m_driveController(driveController), m_ramseteController(ramseteController), m_localization(std::move(localization)), m_isFollowingTrajectory(false), little_will(littleWill), m_intake(intake)
 {
     // Validate all pointer parameters
     if (!leftDrivetrain)
@@ -184,48 +182,35 @@ void Robot::processAction(const ActionPoint &ap)
         Logger::getInstance()->log("Action: %f", action);
     }
 
-    if (ap.actions.size() > 0) // Example action check
+    if (ap.actions.size() < 4)
     {
-        if (ap.actions[0] == 1.0)
-        {
-            intake->move_velocity(12000); // Run intake at full speed
-            top_intake->move_velocity(-12000);
-            indexer->move_velocity(12000); // Run indexer at full speed
-            if (trapdoor->get_state())
-            {
-                trapdoor->toggle();
-            }
-        }
-        else if (ap.actions[0] == 2.0) // Outake to middle goal
-        {
-            intake->move_velocity(12000); // Run intake in reverse at full speed
-            top_intake->move_voltage(1500); // Run top intake at full speed
-            indexer->move_voltage(-12000); // Run indexer in reverse at full speed
-        }
-        else if (ap.actions[0] == 3.0) // Outake into low goal
-        {
-            intake->move_voltage(-12000); // Run intake at full speed
-            top_intake->move_voltage(12000);
-            indexer->move_voltage(-12000); // Run indexer at full speed
-        }
-        else if (ap.actions[0] == 4.0) // Outake to high goal
-        {
-            intake->move_voltage(12000); // Run intake in reverse at full speed
-            indexer->move_voltage(-12000); // Run indexer in reverse at full speed
-            top_intake->move_voltage(-12000); // Run top intake at full speed
-            if (!trapdoor->get_state())
-            {
-                trapdoor->toggle();
-            }
+        Logger::getInstance()->logError("Insufficient action parameters, expected at least 4");
+        return;
+    }
+
+    int intake_action = static_cast<int>(ap.actions[0]); // Convert to int for easier handling
+    m_intake->set_state(intake_action); // Set intake state based on action
+
+    if (ap.actions[1] == 1.0) // Example action check for little will
+    {
+        little_will->toggle();
+    }
+    if (ap.actions[2] == 1.0) // Example action check for trapdoor
+    {
+        // Cast to the specific type you know it is
+        if (auto distance_reset_odometry = dynamic_cast<DistanceResetOdometry*>(m_localization.get())) {
+            distance_reset_odometry->resetLeft();
         } else {
-            intake->move_voltage(0);
-            top_intake->move_voltage(0);
-            indexer->move_voltage(0);
+            Logger::getInstance()->logError("Failed to cast to DistanceResetOdometry");
         }
     }
-    else if (ap.actions.size() > 1 && ap.actions[1] == 1.0) // Example action check for little will
+    if (ap.actions[3] == 1.0)
     {
-        // Toggle little will
+        if (auto distance_reset_odometry = dynamic_cast<DistanceResetOdometry*>(m_localization.get())) {
+            distance_reset_odometry->resetRight();
+        } else {
+            Logger::getInstance()->logError("Failed to cast to DistanceResetOdometry");
+        }
     }
 }
 

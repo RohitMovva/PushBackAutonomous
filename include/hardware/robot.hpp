@@ -12,6 +12,8 @@
 #include "pros/motors.hpp"
 #include "pros/motor_group.hpp"
 
+#include "hardware/intake.hpp"
+
 #include "controllers/ramsete_controller.hpp"
 #include "controllers/drivetrain_controller.hpp"
 #include "controllers/pid_controller.hpp"
@@ -45,10 +47,7 @@ private:
     bool m_isFollowingTrajectory;                  ///< Flag indicating if trajectory following is active
 
     EnhancedDigitalOut *little_will; ///< Digital output for little will
-    EnhancedDigitalOut *trapdoor;    ///< Digital output for trapdoor
-    pros::Motor *indexer;            ///< Motor for indexer
-    pros::Motor *intake;             ///< Motor for intake
-    pros::Motor *top_intake;         ///< Motor for top intake
+    Intake *m_intake;         ///< Intake class w/ color sorting
 
     /**
      * @brief Process a trajectory point from the trajectory
@@ -93,10 +92,7 @@ public:
           RamseteController *ramseteController,
           std::unique_ptr<ILocalization> localization,
           EnhancedDigitalOut *littleWill,
-          EnhancedDigitalOut *trapdoor,
-          pros::Motor *indexer,
-          pros::Motor *intake,
-          pros::Motor *top_intake);
+          Intake *intake);
 
     /**
      * @brief Destructor for Robot class

@@ -18,9 +18,10 @@ def parse_time(time_str):
 def analyze_log_file(log_file_path):
     """Extract time and position data from log file."""
     # Patterns to match the required lines
-    left_pattern = re.compile(r'(\[\d{2}:\d{2}:\d{2}\.\d{3}\]) Left Positions: ([\d\.\s]+)')
-    right_pattern = re.compile(r'(\[\d{2}:\d{2}:\d{2}\.\d{3}\]) Right Positions: ([\d\.\s]+)')
-    
+    left_pattern = re.compile(r'(\[\d{2}:\d{2}:\d{2}\.\d{3}\]) \[LOG\] Left Positions: ([-\d\.\s]+)')
+    right_pattern = re.compile(r'(\[\d{2}:\d{2}:\d{2}\.\d{3}\]) \[LOG\] Right Positions: ([-\d\.\s]+)')
+    print(left_pattern)
+    print(right_pattern)
     # Data storage
     times = []
     left_avgs = []
@@ -75,8 +76,8 @@ def plot_positions(times, left_avgs, right_avgs):
         start_time = times[0]
         times = [t - start_time for t in times]
     
-    plt.plot(times, left_avgs, label='Left Positions Avg', color='blue', marker='o', linestyle='-', markersize=4)
-    plt.plot(times, right_avgs, label='Right Positions Avg', color='red', marker='x', linestyle='-', markersize=4)
+    plt.plot(times, left_avgs, label='Left Positions Avg', color='blue', linestyle='-', markersize=4)
+    plt.plot(times, right_avgs, label='Right Positions Avg', color='red', linestyle='-', markersize=4)
     
     plt.xlabel('Time (seconds)')
     plt.ylabel('Average Position')
@@ -95,7 +96,7 @@ def plot_positions(times, left_avgs, right_avgs):
 
 if __name__ == "__main__":
     import sys
-    log_file_path = 'default.txt'
+    log_file_path = '../logs/default.log'
     
     try:
         times, left_avgs, right_avgs = analyze_log_file(log_file_path)

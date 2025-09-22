@@ -21,8 +21,9 @@ def parse_log_file(file_path):
     ramsete_data = []
     
     # Compile regex patterns for faster matching
-    mp_pattern = re.compile(r'\[(\d{2}:\d{2}:\d{2}\.\d{3})\] MP Output: ([-\d\.]+) ([-\d\.]+)')
-    ramsete_pattern = re.compile(r'\[(\d{2}:\d{2}:\d{2}\.\d{3})\] Ramsete Output: ([-\d\.]+) ([-\d\.]+)')
+    # Updated patterns to include log type [LOG] or [ERROR] between timestamp and message
+    mp_pattern = re.compile(r'\[(\d{2}:\d{2}:\d{2}\.\d{3})\] \[LOG\] MP Output: ([-\d\.]+) ([-\d\.]+)')
+    ramsete_pattern = re.compile(r'\[(\d{2}:\d{2}:\d{2}\.\d{3})\] \[LOG\] Ramsete Output: ([-\d\.]+) ([-\d\.]+)')
     
     # Parse the log file
     with open(file_path, 'r') as file:
@@ -115,7 +116,7 @@ def main():
     Main function to run the script.
     """
     # Log file path (in the same directory as this script)
-    log_file = "robot_log_19700101_000000.txt"
+    log_file = "../logs/default.log"
     output_path = "velocity_plots.png"
     
     # Check if the log file exists

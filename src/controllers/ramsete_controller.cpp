@@ -133,16 +133,6 @@ std::vector<double> RamseteController::calculate(double x, double y, double thet
         w += b_ * v_ref * (std::sin(e_theta) / e_theta) * e_y + k * e_theta;
     }
 
-    // Apply velocity limits with low-speed consideration
-    // if (is_low_speed && false) {
-    //     double limit = std::abs(v_ref) * 1.1;
-    //     v = std::clamp(v, -limit, limit);
-    // } else {
-    //     v = std::clamp(v, -max_v_, max_v_);
-    // }
-    // w = std::clamp(w, -max_w_, max_w_);
-    // TODO re-enable if this breaks stuff
-
     // Convert linear velocity back to user units
     v /= scale_factor_;
     

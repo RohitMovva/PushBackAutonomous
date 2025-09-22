@@ -4,7 +4,7 @@
 #include "navigation/i_localization.hpp"
 #include "navigation/odometry.hpp"
 #include "navigation/mcl.hpp"
-#include "navigation/odometry_reset.hpp"
+#include "navigation/distance_reset_odometry.hpp"
 #include "utilities/logger.hpp"
 #include <memory>
 #include <string>
@@ -66,7 +66,6 @@ public:
     static bool isTypeSupported(LocalizationType type);
 };
 
-// Template implementation (must be in header for template instantiation)
 template<typename... Args>
 std::unique_ptr<ILocalization> LocalizationManager::create(LocalizationType type, Args&&... args)
 {
@@ -112,8 +111,8 @@ std::unique_ptr<ILocalization> LocalizationManager::createOdometry(Args&&... arg
 template<typename... Args>
 std::unique_ptr<ILocalization> LocalizationManager::createOdometryReset(Args&&... args)
 {
-    if constexpr (std::is_constructible_v<OdometryReset, Args...>) {
-        return std::make_unique<OdometryReset>(std::forward<Args>(args)...);
+    if constexpr (std::is_constructible_v<DistanceResetOdometry, Args...>) {
+        return std::make_unique<DistanceResetOdometry>(std::forward<Args>(args)...);
     } else {
         return nullptr;
     }

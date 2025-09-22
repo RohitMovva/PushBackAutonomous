@@ -44,18 +44,7 @@ void Odometry::update()
 
     // Get filtered heading
     double filteredHeading;
-    if (useHeadingFilter)
-    {
-        headingFilter.predict(deltaTime);
-        double measured_heading = Angles::degreesToRadians(imu.get_heading() * -1);
-        double measured_angular_velocity = Angles::degreesToRadians(imu.get_gyro_rate().x);
-        headingFilter.update(measured_heading, measured_angular_velocity, true);
-        filteredHeading = headingFilter.getHeading();
-    }
-    else
-    {
-        filteredHeading = Angles::degreesToRadians(imu.get_heading() * -1);
-    }
+    filteredHeading = Angles::degreesToRadians(imu.get_heading() * -1);
 
     Logger::getInstance()->log("IMU Heading: %f", imu.get_heading() * -1);
     Logger::getInstance()->log("Heading: %f", filteredHeading);

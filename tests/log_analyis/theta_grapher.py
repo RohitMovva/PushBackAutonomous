@@ -188,7 +188,7 @@ def extract_additional_data(log_file):
 
 def main():
     """Main function to run the analysis and visualization."""
-    log_file = "../logs/default.txt"
+    log_file = "../logs/default.log"
     
     try:
         # Extract theta data

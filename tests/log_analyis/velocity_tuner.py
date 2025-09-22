@@ -165,7 +165,7 @@ if __name__ == "__main__":
     # Make sure to install mplcursors if not already installed
     # You can install it using: pip install mplcursors
 
-    vel_df, volt_df = parse_data('../logs/default.txt')
+    vel_df, volt_df = parse_data('../logs/default.log')
 
     # Create both velocity and integral plots with voltage
     plot_data(vel_df, volt_df, plot_integral=False)  # Velocity plot
