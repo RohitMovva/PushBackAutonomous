@@ -1,14 +1,17 @@
 #include "intake.hpp"
 
-Intake::Intake(pros::Motor& lower, pros::Motor& middle, pros::Motor& upper, EnhancedDigitalOut& stopper_ear, EnhancedDigitalOut& ear,
-                pros::Optical& optical_sensor)
-    : lower_intake_(lower), middle_intake_(middle), upper_intake_(upper), optical_sensor_(optical_sensor), 
-      stopper_ear_(stopper_ear), ear_(ear), detection_task_(nullptr), target_color_(nullptr), intake_state_(0),
+Intake::Intake(pros::Motor& lower, pros::Motor& middle, pros::Motor& upper, EnhancedDigitalOut& stopper_ear, EnhancedDigitalOut& ear, EnhancedDigitalOut& park,
+                pros::Optical& optical_sensor, pros::Optical& park_sensor)
+    : lower_intake_(lower), middle_intake_(middle), upper_intake_(upper), optical_sensor_(optical_sensor), park_sensor_(park_sensor),
+      stopper_ear_(stopper_ear), ear_(ear), park_(park), detection_task_(nullptr), target_color_(nullptr), intake_state_(0),
       color_sorting_active_(false), ejecting_(false) {
     
+    park_sensor_.set_led_pwm(100);
     // Initialize optical sensor settings
     optical_sensor_.set_integration_time(20.0);
     optical_sensor_.set_led_pwm(100);
+
+    park_sensor_.set_integration_time(20.0);
 }
 
 Intake::~Intake() {
@@ -16,6 +19,9 @@ Intake::~Intake() {
 }
 
 void Intake::set_state(int state) {
+    if (intake_state_ == 5) {
+        return;
+    }
     intake_state_ = state;
     
     // Only apply motor changes if not currently ejecting
@@ -65,6 +71,12 @@ void Intake::apply_state_motors() {
             middle_intake_.move_voltage(12000);
             upper_intake_.move_voltage(12000);
             stopper_ear_.set_value(false);
+            break;
+
+        case 5: // Slow outake to park
+            lower_intake_.move_voltage(-6500);
+            middle_intake_.move_voltage(-6500);
+            upper_intake_.move_voltage(-6500);
             break;
 
         default:
@@ -167,6 +179,28 @@ void Intake::color_detection_loop() {
             apply_state_motors();
         }
         
+        pros::delay(10);
+    }
+}
+
+void Intake::park() {
+    set_state(5);
+    lower_intake_.move_voltage(-6500);
+    middle_intake_.move_voltage(-6500);
+    upper_intake_.move_voltage(-6500);
+    while (true){
+        pros::lcd::print(0, "Park Hue: %.2f", park_sensor_.get_hue());
+        if ((park_sensor_.get_hue() >= color_params_.blue_hue_min && park_sensor_.get_hue() <= color_params_.blue_hue_max) || 
+            (park_sensor_.get_hue() >= color_params_.red_hue_min || park_sensor_.get_hue() <= color_params_.red_hue_max)) {
+            pros::delay(100);
+            lower_intake_.move_voltage(0);
+            middle_intake_.move_voltage(0);
+            upper_intake_.move_voltage(0);
+            set_state(0);
+
+            park_.set_value(true);
+            return;
+        }
         pros::delay(10);
     }
 }

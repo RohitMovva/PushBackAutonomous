@@ -1,18 +1,5 @@
 #include "main.h"
 
-/**
- * @brief Structure to hold distance sensor and its offset
- */
-// struct DistanceSensor
-// {
-//     pros::Distance* sensor;
-//     double offsetX;
-//     double offsetY;
-
-//     DistanceSensor(pros::Distance* s = nullptr, double oX = 0.0, double oY = 0.0) 
-//         : sensor(s), offsetX(oX), offsetY(oY) {}
-// };
-
 // Robot config
 pros::Controller master(pros::E_CONTROLLER_MASTER);
 pros::MotorGroup left_mg({-11, -13, -15});
@@ -20,7 +7,8 @@ pros::MotorGroup right_mg({19, 18, 17});
 pros::Motor lower_intake_m(-2);
 pros::Motor middle_intake_m(6);
 pros::Motor upper_intake_m(-3);
-pros::Optical optical_sensor(21);
+pros::Optical color_sort_os(21);
+pros::Optical park_os(10); 
 pros::Distance left_distance_sensor(8);
 
 DistanceResetOdometry::DistanceSensor left_sensor(&left_distance_sensor, 6.9, -2.75);
@@ -29,7 +17,8 @@ DistanceResetOdometry::DistanceSensor left_sensor(&left_distance_sensor, 6.9, -2
 EnhancedDigitalOut stopper_ear(8, false);
 EnhancedDigitalOut little_will(7, false);
 EnhancedDigitalOut ear(6, false);
-Intake intake(lower_intake_m, middle_intake_m, upper_intake_m, stopper_ear, ear, optical_sensor);
+EnhancedDigitalOut park(5, false);
+Intake intake(lower_intake_m, middle_intake_m, upper_intake_m, stopper_ear, ear, park, color_sort_os, park_os);
 
 Trajectory trajectory;
 
@@ -44,7 +33,7 @@ std::string program_type = "autonomous";
 
 // Routes
 std::vector<std::vector<double>> route;
-std::string route_name = "straight_line"; 
+std::string route_name = "test2"; 
 
 RamseteController* ramsete_controller;
 DrivetrainController* drive_controller;
@@ -151,75 +140,6 @@ int joystickCurve(int x, double a = 2.5)
     return int(((127.0 * std::pow(std::abs(double(x)), std::abs(a))) / (std::pow(127.0, a))) * (double(x) / std::abs(double(x))));
 }
 
-
-
-void testDistanceReset()
-{
-    double sensorReadingMillimeters = left_distance_sensor.get();
-    if (sensorReadingMillimeters >= 9999) {
-        Logger::getInstance()->logWarning("Invalid left sensor reading: %f", sensorReadingMillimeters);
-        return;
-    }
-
-    double sensorReadingInches = sensorReadingMillimeters / 25.4;
-    Logger::getInstance()->log("Left sensor reading: %f in", sensorReadingInches);
-
-    // Get current pose and heading
-    double robotHeading = imu_sensor.get_heading() * (M_PI / 180.0); // Convert to radians
-    pros::lcd::print(1, "Heading: %.2f", robotHeading * (180.0 / M_PI));
-
-    double directionOffset = 90.0; // 90 bc left
-
-    int headingDeg = (int)(robotHeading * (180.0 / M_PI) + directionOffset);
-
-    headingDeg = headingDeg % 360;
-
-    bool resettingX = false;
-    double wallSign = 1.0;
-
-    if (315 <= headingDeg || headingDeg <= 45) // Right wall 
-    {
-        resettingX = true;
-        wallSign = 1.0;
-    }
-    else if (45 <= headingDeg && headingDeg < 135) // Top wall
-    {
-        resettingX = false;
-        wallSign = -1.0;
-    }
-    else if (135 <= headingDeg && headingDeg < 225) // Left wall
-    {
-        resettingX = true;
-        wallSign = -1.0;
-    }
-    else { // Bottom wall
-        resettingX = false;
-        wallSign = 1.0;
-    }
-
-
-    if (resettingX) {
-        robotHeading += M_PI / 2;
-    }
-
-    double sensorToWall = std::cos(robotHeading) * sensorReadingInches;
-
-    double sensorToRobot = left_sensor.offsetX * std::cos(robotHeading) + left_sensor.offsetY * std::sin(robotHeading);
-
-    double robotToWall = sensorToWall + sensorToRobot;
-
-    double actualPos = wallSign * (70.7 - robotToWall);
-
-    pros::lcd::print(3, "Distance From Wall: %.2f", robotToWall);
-
-    if (resettingX){
-        pros::lcd::print(2, "Current X: %.2f", actualPos);
-    }
-    else {
-        pros::lcd::print(2, "Current Y: %.2f", actualPos);
-    }
-}
-
 /**
  * Runs the operator control code. This function will be started in its own task
  * with the default priority and stack size whenever the robot is enabled via
@@ -264,6 +184,11 @@ void opcontrol()
             intake.set_state(0); // Stop intake if no buttons are pressed
         }
 
+        if (master.get_digital(DIGITAL_X)) 
+        {
+            intake.park();
+        }
+
         little_will.input_toggle(master.get_digital(DIGITAL_DOWN));
 
         stopper_ear.input_toggle(master.get_digital(DIGITAL_B));
@@ -273,7 +198,6 @@ void opcontrol()
 
         pros::delay(Config::DT);
 
-        // testDistanceReset();
     }
 
 }

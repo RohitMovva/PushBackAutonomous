@@ -33,9 +33,11 @@ private:
     pros::Motor& upper_intake_;        ///< Upper intake motor reference
     EnhancedDigitalOut& stopper_ear_; 
     EnhancedDigitalOut& ear_;
+    EnhancedDigitalOut& park_;
 
     // Color detection
     pros::Optical& optical_sensor_;  ///< Optical sensor reference
+    pros::Optical& park_sensor_;     ///< Park sensor reference
     pros::Task* detection_task_;     ///< Color detection task pointer
     const char* target_color_;       ///< Target color for sorting ("red" or "blue")
     ColorInfo color_params_;         ///< Color detection parameters
@@ -71,7 +73,7 @@ public:
      * @param optical_sensor Reference to optical sensor
      */
     Intake(pros::Motor& indexer, pros::Motor& intake, pros::Motor& top_intake, 
-                EnhancedDigitalOut& stopper_ear, EnhancedDigitalOut& ear, pros::Optical& optical_sensor);
+                EnhancedDigitalOut& stopper_ear, EnhancedDigitalOut& ear, EnhancedDigitalOut& park, pros::Optical& optical_sensor, pros::Optical& park_sensor);
     
     /**
      * @brief Destructor - ensures proper cleanup
@@ -117,4 +119,6 @@ public:
      * @return true if ejecting, false otherwise
      */
     bool is_ejecting() const;
+
+    void park();
 };

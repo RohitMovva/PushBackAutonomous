@@ -170,7 +170,7 @@ namespace Units
     namespace Constants
     {
         // Wheel diameters (inches)
-        constexpr double WHEEL_2_75_INCH = 2.79;
+        constexpr double WHEEL_2_75_INCH = 2.8;
         constexpr double WHEEL_3_25_INCH = 3.25;
         constexpr double WHEEL_4_INCH = 4.0;
 
