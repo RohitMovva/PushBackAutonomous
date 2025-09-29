@@ -73,8 +73,8 @@ def plot_theta_data(timestamps, actual_thetas, goal_thetas):
     plt.figure(figsize=(12, 6))
     
     # Plot actual and goal theta values
-    plt.plot(timestamps, actual_thetas, label='Actual Theta', color='blue', marker='o', linestyle='-', markersize=4)
-    plt.plot(timestamps, goal_thetas, label='Goal Theta', color='red', marker='x', linestyle='--', markersize=4)
+    plt.plot(timestamps, actual_thetas, label='Actual Theta', color='blue', linestyle='-', markersize=4)
+    plt.plot(timestamps, goal_thetas, label='Goal Theta', color='red', linestyle='--', markersize=4)
     
     # Add error/difference line
     theta_diff = [actual - goal for actual, goal in zip(actual_thetas, goal_thetas)]

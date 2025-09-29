@@ -164,13 +164,13 @@ void Intake::color_detection_loop() {
             }
         }
         
-        if (detection_counter >= 3) { // Actual object
-            // pros::delay();  // Detection delay
+        if (detection_counter >= 1) { // Actual block
+            // pros::delay();
             
             ejecting_.store(true);
             
             upper_intake_.move_voltage(-12000);
-            pros::delay(150);
+            pros::delay(200);
             
             upper_intake_.move_voltage(12000);
             
@@ -185,9 +185,9 @@ void Intake::color_detection_loop() {
 
 void Intake::park() {
     set_state(5);
-    lower_intake_.move_voltage(-6500);
-    middle_intake_.move_voltage(-6500);
-    upper_intake_.move_voltage(-6500);
+    lower_intake_.move_velocity(-100);
+    middle_intake_.move_velocity(-100);
+    upper_intake_.move_velocity(-100);
     while (true){
         pros::lcd::print(0, "Park Hue: %.2f", park_sensor_.get_hue());
         if ((park_sensor_.get_hue() >= color_params_.blue_hue_min && park_sensor_.get_hue() <= color_params_.blue_hue_max) || 

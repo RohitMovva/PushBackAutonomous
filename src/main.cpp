@@ -33,7 +33,7 @@ std::string program_type = "autonomous";
 
 // Routes
 std::vector<std::vector<double>> route;
-std::string route_name = "test2"; 
+std::string route_name = "sawp2"; 
 
 RamseteController* ramsete_controller;
 DrivetrainController* drive_controller;
@@ -73,10 +73,9 @@ void initialize()
         left_mg, right_mg, side_encoder, imu_sensor, distance_sensors,
         false, true
     );
-    // logger->log("Localization init: %s",  ? "Success" : "Failed");
     
-    ramsete_controller = new RamseteController(2.0, 0.7, 4.5 * 12, 5.0, 0.0254000508);
-    drive_controller = new DrivetrainController(2.5, 1.7, 0.3, 3.0, 0.00, 0.0);
+    ramsete_controller = new RamseteController(2.2, 0.7, 4.5 * 12, 5.0, 0.0254000508);
+    drive_controller = new DrivetrainController(2.5, 1.7, 0.3, 3.0, 0.00, 0.0); // TODO try reducing kP
 
     robot = new Robot(&left_mg, &right_mg, &imu_sensor, drive_controller, ramsete_controller, std::move(localization), 
                       &little_will, &intake);
@@ -191,7 +190,7 @@ void opcontrol()
 
         little_will.input_toggle(master.get_digital(DIGITAL_DOWN));
 
-        stopper_ear.input_toggle(master.get_digital(DIGITAL_B));
+        // stopper_ear.input_toggle(master.get_digital(DIGITAL_B));
         ear.input_toggle(master.get_digital(DIGITAL_B));
 
         std::cout << "test" << std::endl;
