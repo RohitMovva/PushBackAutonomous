@@ -8,11 +8,12 @@ pros::Motor lower_intake_m(-2);
 pros::Motor middle_intake_m(6);
 pros::Motor upper_intake_m(-3);
 pros::Optical color_sort_os(21);
-pros::Optical park_os(10); 
+pros::Optical park_os(10);
 pros::Distance left_distance_sensor(8);
+pros::Distance right_distance_sensor(9);
 
 DistanceResetOdometry::DistanceSensor left_sensor(&left_distance_sensor, 6.9, -2.75);
-
+DistanceResetOdometry::DistanceSensor right_sensor(&right_distance_sensor, -6.9, -2.75);
 
 EnhancedDigitalOut stopper_ear(8, false);
 EnhancedDigitalOut little_will(7, false);
@@ -58,7 +59,7 @@ void initialize()
     left_mg.tare_position_all();
     right_mg.tare_position_all();
 
-    intake.start_color_sorting("blue");
+    // intake.start_color_sorting("blue");
 
     // Calibrate the inertial sensor
     imu_sensor.reset();
@@ -192,8 +193,6 @@ void opcontrol()
 
         // stopper_ear.input_toggle(master.get_digital(DIGITAL_B));
         ear.input_toggle(master.get_digital(DIGITAL_B));
-
-        std::cout << "test" << std::endl;
 
         pros::delay(Config::DT);
 

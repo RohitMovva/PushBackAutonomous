@@ -23,7 +23,7 @@ def parse_data(filename):
         for line in file:
             # Updated regex patterns to handle type specifiers like [LOG], [INFO], [ERROR]
             # Extract timestamp and velocities
-            vel_match = re.match(r'\[(\d+:\d+:\d+\.\d+)\] \[(?:LOG|INFO|ERROR|WARN|DEBUG)\] Right wheel velocities: ([-\d.]+) ([-\d.]+)', line)
+            vel_match = re.match(r'\[(\d+:\d+:\d+\.\d+)\] \[(?:LOG|INFO|ERROR|WARN|DEBUG)\] Left wheel velocities: ([-\d.]+) ([-\d.]+)', line)
             volt_match = re.match(r'\[(\d+:\d+:\d+\.\d+)\] \[(?:LOG|INFO|ERROR|WARN|DEBUG)\] Voltages: ([-\d.]+) ([-\d.]+)', line)
             
             if vel_match:
@@ -33,7 +33,7 @@ def parse_data(filename):
                 
             elif volt_match:
                 volt_data['timestamp'].append(volt_match.group(1))
-                volt_data['voltage'].append(float(volt_match.group(3)))
+                volt_data['voltage'].append(float(volt_match.group(2)))
     
     # Create separate dataframes
     vel_df = pd.DataFrame(vel_data)
