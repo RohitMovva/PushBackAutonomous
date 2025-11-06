@@ -60,6 +60,8 @@ public:
      */
     void loadFromFile(const std::string &filepath);
 
+    void loadFromVector();
+
     /**
      * @brief Get the next data point in sequence
      *

@@ -20,6 +20,7 @@ with open('../logs/default.log', 'r') as file: # robot_log_19700101_000000.txt
             t += 0.025  # Assuming 25ms between each line
             # Extract pose data (actual position)
             parts = line.split()
+            print(parts)
             actual_x.append(float(parts[3]))
             actual_y.append(float(parts[4]))
             actual_theta.append(float(parts[5]))

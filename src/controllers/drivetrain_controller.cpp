@@ -71,13 +71,13 @@ DrivetrainController::MotorVoltages DrivetrainController::calculateVoltages(
         rightIntegralError,
         rightDerivative);
 
-    Logger::getInstance()->log("Left Feedforward: %f, Right Feedforward: %f", leftFeedforward, rightFeedforward);
-    Logger::getInstance()->log("Left Feedback: %f, Right Feedback: %f", leftFeedback, rightFeedback);
+    // Logger::getInstance()->log("Left Feedforward: %f, Right Feedforward: %f", leftFeedforward, rightFeedforward);
+    // Logger::getInstance()->log("Left Feedback: %f, Right Feedback: %f", leftFeedback, rightFeedback);
 
     // Combine feedforward and feedback
     int leftVoltage = static_cast<int>(leftFeedforward + leftFeedback);
     int rightVoltage = static_cast<int>(rightFeedforward + rightFeedback);
-    Logger::getInstance()->log("Left Voltage: %d, Right Voltage: %d", leftVoltage, rightVoltage);
+    // Logger::getInstance()->log("Left Voltage: %d, Right Voltage: %d", leftVoltage, rightVoltage);
     
     // Update previous values
     prevLeftVelocityError = leftVelocityError;
@@ -92,7 +92,7 @@ DrivetrainController::MotorVoltages DrivetrainController::calculateVoltages(
 }
 
 double DrivetrainController::calculateFeedforward(double velocityTicks, double accelerationTicks) {
-    Logger::getInstance()->log("Velocity: %f, Acceleration: %f", velocityTicks, accelerationTicks);
+    // Logger::getInstance()->log("Velocity: %f, Acceleration: %f", velocityTicks, accelerationTicks);
     return std::copysign(kS, velocityTicks) + 
            kV * velocityTicks + 
            kA * accelerationTicks;

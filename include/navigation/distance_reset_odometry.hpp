@@ -41,7 +41,7 @@ public:
     };
 
 private:
-    // Field dimensions (VEX standard field)
+    // Field dimensions may need to tune further but idk
     static constexpr double FIELD_WIDTH = 144.0;  // inches
     static constexpr double FIELD_HEIGHT = 144.0; // inches
 

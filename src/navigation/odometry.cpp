@@ -46,8 +46,8 @@ void Odometry::update()
     double filteredHeading;
     filteredHeading = Angles::degreesToRadians(imu.get_heading() * -1);
 
-    Logger::getInstance()->log("IMU Heading: %f", imu.get_heading() * -1);
-    Logger::getInstance()->log("Heading: %f", filteredHeading);
+    // Logger::getInstance()->log("IMU Heading: %f", imu.get_heading() * -1);
+    // Logger::getInstance()->log("Heading: %f", filteredHeading);
 
     double deltaTheta = filteredHeading;
 
@@ -61,10 +61,10 @@ void Odometry::update()
     // For now, disable lateral encoder
     lateralPos = 0;
 
-    Logger::getInstance()->log("Left Positions: %f %f %f", leftDrive.get_position_all()[0],
-                               leftDrive.get_position_all()[1], leftDrive.get_position_all()[2]);
-    Logger::getInstance()->log("Right Positions: %f %f %f", rightDrive.get_position_all()[0],
-                               rightDrive.get_position_all()[1], rightDrive.get_position_all()[2]);
+    // Logger::getInstance()->log("Left Positions: %f %f %f", leftDrive.get_position_all()[0],
+    //                            leftDrive.get_position_all()[1], leftDrive.get_position_all()[2]);
+    // Logger::getInstance()->log("Right Positions: %f %f %f", rightDrive.get_position_all()[0],
+    //                            rightDrive.get_position_all()[1], rightDrive.get_position_all()[2]);
 
     double currentLeftPos = getAveragePosition(leftPositions);
     double currentRightPos = getAveragePosition(rightPositions);
@@ -73,7 +73,7 @@ void Odometry::update()
     // Calculate position changes
     double deltaLeft = currentLeftPos - getAveragePosition(prevLeftPos);
     double deltaRight = currentRightPos - getAveragePosition(prevRightPos);
-    Logger::getInstance()->log("DeltaLeft: %f, DeltaRight: %f", deltaLeft, deltaRight);
+    // Logger::getInstance()->log("DeltaLeft: %f, DeltaRight: %f", deltaLeft, deltaRight);
     double deltaLateral = lateralPos - prevLateralPos;
 
     // Update velocities with optional filtering
@@ -98,8 +98,8 @@ void Odometry::update()
 
     // Calculate forward displacement
     double forwardDisplacement = (deltaLeft + deltaRight) / 2.0;
-    Logger::getInstance()->log("Forward displacement: %f", forwardDisplacement);
-    Logger::getInstance()->log("Delta theta: %f", deltaTheta);
+    // Logger::getInstance()->log("Forward displacement: %f", forwardDisplacement);
+    // Logger::getInstance()->log("Delta theta: %f", deltaTheta);
 
     // Local position update
     double deltaX, deltaY;
@@ -126,7 +126,7 @@ void Odometry::update()
                  deltaLateral * cos(currentPose.theta);
     }
 
-    Logger::getInstance()->log("DeltaX: %f, DeltaY: %f", deltaX, deltaY);
+    // Logger::getInstance()->log("DeltaX: %f, DeltaY: %f", deltaX, deltaY);
 
     // Update position with optional Kalman filtering
     currentPose.x += deltaX;

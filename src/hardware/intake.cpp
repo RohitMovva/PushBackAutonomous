@@ -19,8 +19,15 @@ Intake::~Intake() {
 }
 
 void Intake::set_state(int state) {
-    if (intake_state_ == 5) {
+    if (intake_state_ == 5 && state == 0) { // don't stop intaking when parking
         return;
+    }
+    pros::lcd::print(3, "Intake delay: %d", intake_decay_ms_);
+    if (intake_decay_ms_ > 0) {
+        return; // Ignore state changes during decay
+    }
+    if (intake_state_ != state) {
+        time_since_state_set_ = 0;
     }
     intake_state_ = state;
     
@@ -30,14 +37,20 @@ void Intake::set_state(int state) {
     }
 }
 
+void Intake::state_decay(int start_state, int end_state, int delay_ms) {
+    intake_decay_state_ = end_state;
+    intake_decay_ms_ = delay_ms;
+    set_state(start_state);
+}
+
 int Intake::get_state() const {
     return intake_state_;
 }
 
 void Intake::apply_state_motors() {
-    // =============================================================================
-    // MOTOR STATE CONFIGURATION AREA - DEFINE YOUR STATE BEHAVIORS HERE
-    // =============================================================================
+    if (ejecting_.load()) {
+        return; // Skip motor updates if ejecting
+    }
     
     switch (intake_state_) {
         case 0:
@@ -48,28 +61,29 @@ void Intake::apply_state_motors() {
             break;
             
         case 1: // Intake
-            lower_intake_.move_velocity(12000);
-            middle_intake_.move_velocity(12000);
-            upper_intake_.move_velocity(12000);
+            lower_intake_.move_voltage(intake_max_speed_);
+            middle_intake_.move_voltage(intake_max_speed_);
+            upper_intake_.move_voltage(intake_max_speed_);
             stopper_ear_.set_value(true);
             break;
 
         case 2: // Outtake to low goal
-            lower_intake_.move_voltage(-12000);
-            middle_intake_.move_voltage(-12000);
-            upper_intake_.move_voltage(-12000);
+            lower_intake_.move_voltage(-intake_max_speed_);
+            middle_intake_.move_voltage(-intake_max_speed_);
+            upper_intake_.move_voltage(-intake_max_speed_);
             break;
             
         case 3: // Outtake to middle goal
-            lower_intake_.move_voltage(12000);
-            middle_intake_.move_velocity(12000);
-            upper_intake_.move_voltage(-1500);
+            lower_intake_.move_voltage(intake_max_speed_);
+            middle_intake_.move_voltage(intake_max_speed_);
+            upper_intake_.move_velocity(-50);
+            stopper_ear_.set_value(false);
             break;
 
         case 4: // Outtake to high goal
-            lower_intake_.move_voltage(12000);
-            middle_intake_.move_voltage(12000);
-            upper_intake_.move_voltage(12000);
+            lower_intake_.move_voltage(intake_max_speed_);
+            middle_intake_.move_voltage(intake_max_speed_);
+            upper_intake_.move_voltage(intake_max_speed_);
             stopper_ear_.set_value(false);
             break;
 
@@ -102,6 +116,27 @@ void Intake::start_color_sorting(const char* target_color, const ColorInfo& colo
     
     // Create and start the color detection task
     detection_task_ = new pros::Task(color_detection_task, this, "Color Detection");
+}
+
+void Intake::update(){
+    // Antijam
+    // pros::lcd::print(0, "Middle Vel: %f", middle_intake_.get_actual_velocity());
+    // pros::lcd::print(1, "State: %d", intake_state_);
+    if (intake_state_ > 2 && middle_intake_.get_actual_velocity() == 0 && time_since_state_set_ > 250){
+        intake_decay_state_ = intake_state_;
+        set_state(2);
+        intake_decay_ms_ = 250;
+    }
+    time_since_state_set_ += 10;
+
+    if (intake_decay_ms_ > 0) {
+        intake_decay_ms_ -= 10;
+        if (intake_decay_ms_ <= 0) {
+            intake_decay_ms_ = 0;
+            intake_state_ = intake_decay_state_;
+        }
+    }
+    apply_state_motors();
 }
 
 void Intake::stop_color_sorting() {
@@ -146,16 +181,16 @@ void Intake::color_detection_loop() {
             continue;
         }
 
-        if (saturation > color_params_.saturation_threshold) {
+        if (saturation > 0) {
             if (strcmp(target_color_, "red") == 0) {
 
-                if (hue >= color_params_.blue_hue_min && hue <= color_params_.blue_hue_max) {
+                if (hue >= 200 && hue <= 240) {
                     detection_counter++;
                 } else {
                     detection_counter = 0;
                 }
             } else {
-                if (hue >= color_params_.red_hue_min || hue <= color_params_.red_hue_max) {
+                if (hue >= 310 || hue <= 10) {
                     detection_counter++;
                 }
                 else {
@@ -168,11 +203,18 @@ void Intake::color_detection_loop() {
             // pros::delay();
             
             ejecting_.store(true);
+
+            if (intake_state_ == 3){
+                upper_intake_.move_voltage(12000);
+                pros::delay(300);
+                upper_intake_.move_velocity(-50);
+            }
+            else {
+                upper_intake_.move_voltage(-12000);
+                pros::delay(200);
+                upper_intake_.move_voltage(12000);
+            }
             
-            upper_intake_.move_voltage(-12000);
-            pros::delay(200);
-            
-            upper_intake_.move_voltage(12000);
             
             ejecting_.store(false);
             
@@ -189,16 +231,25 @@ void Intake::park() {
     middle_intake_.move_velocity(-100);
     upper_intake_.move_velocity(-100);
     while (true){
-        pros::lcd::print(0, "Park Hue: %.2f", park_sensor_.get_hue());
-        if ((park_sensor_.get_hue() >= color_params_.blue_hue_min && park_sensor_.get_hue() <= color_params_.blue_hue_max) || 
-            (park_sensor_.get_hue() >= color_params_.red_hue_min || park_sensor_.get_hue() <= color_params_.red_hue_max)) {
+        double hue = park_sensor_.get_hue();
+        pros::lcd::print(1, "Park Hue: %.2f", hue);
+        pros::lcd::print(2, "%d %d", 
+        (hue >= color_params_.blue_hue_min && hue <= color_params_.blue_hue_max), 
+        (hue >= color_params_.red_hue_min || hue <= color_params_.red_hue_max));
+
+        pros::lcd::print(5, "%d", hue >= color_params_.red_hue_min);
+        pros::lcd::print(6, "%d", hue <= color_params_.red_hue_max);
+
+        pros::lcd::print(7, "red min: %d", color_params_.red_hue_min);
+
+        if ((hue >= 200 && hue <= 270) || 
+            (hue >= 310|| hue <= 10)) {
             pros::delay(100);
-            lower_intake_.move_voltage(0);
-            middle_intake_.move_voltage(0);
-            upper_intake_.move_voltage(0);
-            set_state(0);
+            intake_state_ = 0;
+            pros::lcd::print(3, "Parked!");
 
             park_.set_value(true);
+            
             return;
         }
         pros::delay(10);

@@ -45,6 +45,8 @@ private:
     RamseteController *m_ramseteController;        ///< Ramsete controller for trajectory following
     std::unique_ptr<ILocalization> m_localization; ///< Localization manager for managing localization systems
     bool m_isFollowingTrajectory;                  ///< Flag indicating if trajectory following is active
+    int m_min_voltage = 0;                          ///< Voltage to keep bot from sliding back from little will
+
 
     EnhancedDigitalOut *little_will; ///< Digital output for little will
     Intake *m_intake;         ///< Intake class w/ color sorting

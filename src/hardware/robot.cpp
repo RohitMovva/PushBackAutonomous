@@ -141,8 +141,8 @@ void Robot::processTrajectory(const TrajectoryPoint &tp)
         current_pose.x, current_pose.y, current_pose.theta,
         tp.x, tp.y, tp.theta,
         tp.linear_vel, tp.angular_vel);
-    Logger::getInstance()->log("Ramsete Output: %f %f", ramsete_output[0], ramsete_output[1]);
-    Logger::getInstance()->log("MP Output: %f %f", tp.linear_vel, tp.angular_vel);
+    // Logger::getInstance()->log("Ramsete Output: %f %f", ramsete_output[0], ramsete_output[1]);
+    // Logger::getInstance()->log("MP Output: %f %f", tp.linear_vel, tp.angular_vel);
 
     // Convert RAMSETE output to wheel velocities using configuration
     auto wheel_velocities = m_ramseteController->calculate_wheel_velocities(
@@ -164,6 +164,15 @@ void Robot::processTrajectory(const TrajectoryPoint &tp)
         left_accel,                                // left acceleration
         right_accel                                // right acceleration
     );
+
+    if (std::abs(voltages.left) == 0)
+    {
+        voltages.left = m_min_voltage;
+    }
+    if (std::abs(voltages.right) == 0)
+    {
+        voltages.right = m_min_voltage;
+    }
     Logger::getInstance()->log("Voltages: %d %d", voltages.left, voltages.right);
 
     // Apply voltages to motors
@@ -182,7 +191,7 @@ void Robot::processAction(const ActionPoint &ap)
         Logger::getInstance()->log("Action: %f", action);
     }
 
-    if (ap.actions.size() < 4)
+    if (ap.actions.size() < 6)
     {
         Logger::getInstance()->logError("Insufficient action parameters, expected at least 4");
         return;
@@ -211,6 +220,19 @@ void Robot::processAction(const ActionPoint &ap)
         } else {
             Logger::getInstance()->logError("Failed to cast to DistanceResetOdometry");
         }
+    }
+
+    if (ap.actions[4] != 0.0)
+    {
+        m_intake->state_decay(4, 1, ap.actions[4] * 1000);
+    }
+
+    if (ap.actions[5] != 0.0)
+    {
+        m_min_voltage = static_cast<int>(ap.actions[5]);
+        Logger::getInstance()->log("Setting min voltage to %d", m_min_voltage);
+    } else {
+        m_min_voltage = 0;
     }
 }
 
@@ -257,10 +279,11 @@ bool Robot::followTrajectory(Trajectory &trajectory)
 
     while (trajectory.hasNext())
     {
-        Logger::getInstance()->log("Processing trajectory point %zu", trajectory_index);
+        // Logger::getInstance()->log("Processing trajectory point %zu", trajectory_index);
 
         // Update localization
         m_localization->update();
+        m_intake->update();
 
         // Check if the current waypoint is a trajectory point or action point
         const DataPoint *point = trajectory.getNext();
@@ -280,8 +303,8 @@ bool Robot::followTrajectory(Trajectory &trajectory)
     }
 
     // Stop motors
-    m_leftDrivetrain->move(0);
-    m_rightDrivetrain->move(0);
+    m_leftDrivetrain->move(12);
+    m_rightDrivetrain->move(12);
 
     m_isFollowingTrajectory = false;
 

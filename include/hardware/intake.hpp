@@ -44,8 +44,13 @@ private:
     
     // State management
     int intake_state_;               ///< Current intake state (0-10 range)
+    int intake_decay_ms_;            ///< Duration to hold temporary states
+    int intake_decay_state_;         ///< State to revert to after decay
+    int time_since_state_set_;      ///< Time since last state change
     std::atomic<bool> color_sorting_active_; ///< Flag indicating if color sorting is running
     std::atomic<bool> ejecting_;     ///< Flag indicating if currently ejecting a piece
+
+    int intake_max_speed_ = 12000;
     
     /**
      * @brief Static wrapper function for color detection task
@@ -85,6 +90,27 @@ public:
      * @param state Integer state value (0-10 range)
      */
     void set_state(int state);
+
+    /**
+     * @brief Temporarily set a state, wait, then revert to another state
+     * @param start_state Initial state to set
+     * @param end_state State to revert to after delay
+     * @param delay_ms Duration to wait in milliseconds
+     */
+    void state_decay(int start_state, int end_state, int delay_ms);
+
+    /**
+     * 
+     */
+    void set_intake_speed(int speed) {
+        intake_max_speed_ = speed;
+        apply_state_motors();
+    }
+
+    /**
+     * 
+     */
+    void update();
     
     /**
      * @brief Get the current intake state
@@ -99,7 +125,7 @@ public:
      */
     void start_color_sorting(const char* target_color, const ColorInfo& colors = {
         310, 10,   // Red hue range
-        200, 250,  // Blue hue range  
+        200, 270,  // Blue hue range  
         0.0        // Minimum saturation threshold
     });
     
@@ -107,6 +133,14 @@ public:
      * @brief Stop color sorting functionality
      */
     void stop_color_sorting();
+
+    void set_shift(bool state) {
+        if (state){
+            intake_max_speed_ = 6000;
+        } else {
+            intake_max_speed_ = 12000;
+        }
+    }
     
     /**
      * @brief Check if color sorting is currently active

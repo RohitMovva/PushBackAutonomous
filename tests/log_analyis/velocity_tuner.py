@@ -47,7 +47,7 @@ def parse_data(filename):
     return vel_df, volt_df
 
 def plot_data(vel_df, volt_df, plot_integral=False):
-    fig, ax1 = plt.subplots(figsize=(12, 8))
+    fig, ax1 = plt.subplots(figsize=(10, 3))
     
     # Create second y-axis for voltage
     ax2 = ax1.twinx()
