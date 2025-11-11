@@ -49,6 +49,7 @@ private:
 
 
     EnhancedDigitalOut *little_will; ///< Digital output for little will
+    EnhancedDigitalOut *rake;        ///< Digital output for rake
     Intake *m_intake;         ///< Intake class w/ color sorting
 
     /**
@@ -94,6 +95,7 @@ public:
           RamseteController *ramseteController,
           std::unique_ptr<ILocalization> localization,
           EnhancedDigitalOut *littleWill,
+          EnhancedDigitalOut *rake,
           Intake *intake);
 
     /**

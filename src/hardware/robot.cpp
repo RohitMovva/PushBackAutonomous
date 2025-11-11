@@ -19,8 +19,9 @@ Robot::Robot(pros::MotorGroup *leftDrivetrain,
              RamseteController *ramseteController,
              std::unique_ptr<ILocalization> localization,
              EnhancedDigitalOut *littleWill,
+             EnhancedDigitalOut *rake,
              Intake *intake)
-    : m_leftDrivetrain(leftDrivetrain), m_rightDrivetrain(rightDrivetrain), m_inertial(inertial), m_driveController(driveController), m_ramseteController(ramseteController), m_localization(std::move(localization)), m_isFollowingTrajectory(false), little_will(littleWill), m_intake(intake)
+    : m_leftDrivetrain(leftDrivetrain), m_rightDrivetrain(rightDrivetrain), m_inertial(inertial), m_driveController(driveController), m_ramseteController(ramseteController), m_localization(std::move(localization)), m_isFollowingTrajectory(false), little_will(littleWill), rake(rake),m_intake(intake)
 {
     // Validate all pointer parameters
     if (!leftDrivetrain)
@@ -191,9 +192,9 @@ void Robot::processAction(const ActionPoint &ap)
         Logger::getInstance()->log("Action: %f", action);
     }
 
-    if (ap.actions.size() < 6)
+    if (ap.actions.size() < 8)
     {
-        Logger::getInstance()->logError("Insufficient action parameters, expected at least 4");
+        Logger::getInstance()->logError("Insufficient action parameters, expected at least 9");
         return;
     }
 
@@ -233,6 +234,31 @@ void Robot::processAction(const ActionPoint &ap)
         Logger::getInstance()->log("Setting min voltage to %d", m_min_voltage);
     } else {
         m_min_voltage = 0;
+    }
+
+    // if (ap.actions[6] != 0.0)
+    // {
+    //     m_intake->set_intake_speed(static_cast<int>(ap.actions[6]));
+    // }
+
+    if (ap.actions[6] == 1.0){
+        rake->toggle();
+    }
+
+    if (ap.actions[7] != 0.0){
+        if (auto distance_reset_odometry = dynamic_cast<DistanceResetOdometry*>(m_localization.get())) {
+            distance_reset_odometry->resetFront();
+        } else {
+            Logger::getInstance()->logError("Failed to cast to DistanceResetOdometry");
+        }
+    }
+
+    if (ap.actions[8] != 0.0){
+        if (m_intake->is_color_sorting_active()){
+            m_intake->stop_color_sorting();
+        } else {
+            m_intake->start_color_sorting(ap.actions[9] == 1.0 ? "red" : "blue");
+        }
     }
 }
 

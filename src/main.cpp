@@ -15,11 +15,12 @@ pros::Distance right_distance_sensor(9);
 DistanceResetOdometry::DistanceSensor left_sensor(&left_distance_sensor, 5.0, 0.6);
 DistanceResetOdometry::DistanceSensor right_sensor(&right_distance_sensor, 5.0, 0.75);
 
-EnhancedDigitalOut stopper_ear(8, false);
+EnhancedDigitalOut stopper(8, false);
 EnhancedDigitalOut little_will(7, false);
 EnhancedDigitalOut ear(6, false);
 EnhancedDigitalOut park(5, false);
-Intake intake(lower_intake_m, middle_intake_m, upper_intake_m, stopper_ear, ear, park, color_sort_os, park_os);
+EnhancedDigitalOut rake(4, false);
+Intake intake(lower_intake_m, middle_intake_m, upper_intake_m, stopper, ear, park, color_sort_os, park_os);
 
 Trajectory trajectory;
 
@@ -77,7 +78,7 @@ void initialize()
     drive_controller = new DrivetrainController(2.5, 1.7, 0.3, 3.0, 0.00, 0.0); // TODO try reducing kP
 
     robot = new Robot(&left_mg, &right_mg, &imu_sensor, drive_controller, ramsete_controller, std::move(localization), 
-                      &little_will, &intake);
+                      &little_will, &rake, &intake);
 
     pros::delay(5);
     trajectory.loadFromFile("/usd/routes/" + route_name + ".txt");

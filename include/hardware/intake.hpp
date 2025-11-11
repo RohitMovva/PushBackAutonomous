@@ -38,7 +38,6 @@ private:
     // Color detection
     pros::Optical& optical_sensor_;  ///< Optical sensor reference
     pros::Optical& park_sensor_;     ///< Park sensor reference
-    pros::Task* detection_task_;     ///< Color detection task pointer
     const char* target_color_;       ///< Target color for sorting ("red" or "blue")
     ColorInfo color_params_;         ///< Color detection parameters
     
@@ -47,21 +46,9 @@ private:
     int intake_decay_ms_;            ///< Duration to hold temporary states
     int intake_decay_state_;         ///< State to revert to after decay
     int time_since_state_set_;      ///< Time since last state change
-    std::atomic<bool> color_sorting_active_; ///< Flag indicating if color sorting is running
-    std::atomic<bool> ejecting_;     ///< Flag indicating if currently ejecting a piece
+    bool color_sorting_active_; ///< Flag indicating if color sorting is running
 
     int intake_max_speed_ = 12000;
-    
-    /**
-     * @brief Static wrapper function for color detection task
-     * @param param Pointer to Intake instance
-     */
-    static void color_detection_task(void* param);
-    
-    /**
-     * @brief Main color detection and ejection logic
-     */
-    void color_detection_loop();
     
     /**
      * @brief Apply motor speeds based on current intake state
@@ -147,12 +134,6 @@ public:
      * @return true if color sorting is running, false otherwise
      */
     bool is_color_sorting_active() const;
-    
-    /**
-     * @brief Check if currently ejecting a game piece
-     * @return true if ejecting, false otherwise
-     */
-    bool is_ejecting() const;
 
     void park();
 };
