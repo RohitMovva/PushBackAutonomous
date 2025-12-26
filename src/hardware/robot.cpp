@@ -329,8 +329,11 @@ bool Robot::followTrajectory(Trajectory &trajectory)
     }
 
     // Stop motors
-    m_leftDrivetrain->move(12);
-    m_rightDrivetrain->move(12);
+    m_leftDrivetrain->move(0);
+    m_rightDrivetrain->move(0);
+
+    // m_leftDrivetrain->move(12);
+    // m_rightDrivetrain->move(12);
 
     m_isFollowingTrajectory = false;
 

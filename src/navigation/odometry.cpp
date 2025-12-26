@@ -104,7 +104,7 @@ void Odometry::update()
     // Local position update
     double deltaX, deltaY;
 
-    if (std::abs(deltaTheta) > 0.0001)
+    if (std::abs(deltaTheta) > 0.00001)
     {
         // Arc odometry
         double turnRadius = forwardDisplacement / deltaTheta;

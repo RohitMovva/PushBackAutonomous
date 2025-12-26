@@ -7,10 +7,10 @@ namespace Config
 {
     // Robot config
     constexpr double WHEEL_DIAMETER = Units::Constants::WHEEL_2_75_INCH;                      ///< Wheel diameter in inches
-    constexpr double WHEEL_CIRCUMFERENCE = WHEEL_DIAMETER * M_PI;                             ///< Wheel circumference in inches
+    constexpr double WHEEL_CIRCUMFERENCE = WHEEL_DIAMETER * M_PI;                          ///< Wheel circumference in inches
     constexpr double TICKS_PER_ROTATION = Units::Constants::V5_BLUE_MOTOR_TICKS_PER_ROTATION; ///< Encoder ticks per rotation for blue cartridges
-    constexpr double GEAR_RATIO = 36.0 / 48.0;                                                ///< Gear ratio of the drivetrain
-    constexpr double WHEEL_BASE_WIDTH = 13.5;                                               ///< Distance between the left and right wheels in inches
+    constexpr double GEAR_RATIO = 36.0 / 48.0;                                           ///< Gear ratio of the drivetrain
+    constexpr double WHEEL_BASE_WIDTH = 14.0;                                               ///< Distance between the left and right wheels in inches
     constexpr double LATERAL_WHEEL_OFFSET = 2.419;                                            ///< Distance from tracking center to lateral wheel in inches
 
     // Velocity Controller Constants

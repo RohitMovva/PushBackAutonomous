@@ -8,7 +8,7 @@ pros::Motor lower_intake_m(-2);
 pros::Motor middle_intake_m(6);
 pros::Motor upper_intake_m(-3);
 pros::Optical color_sort_os(21);
-pros::Optical park_os(10);
+pros::Distance park_dist(10);
 pros::Distance left_distance_sensor(7);
 pros::Distance right_distance_sensor(9);
 
@@ -20,11 +20,12 @@ EnhancedDigitalOut little_will(7, false);
 EnhancedDigitalOut ear(6, false);
 EnhancedDigitalOut park(5, false);
 EnhancedDigitalOut rake(4, false);
-Intake intake(lower_intake_m, middle_intake_m, upper_intake_m, stopper, ear, park, color_sort_os, park_os);
+Intake intake(lower_intake_m, middle_intake_m, upper_intake_m, stopper, ear, park, color_sort_os, park_dist);
 
 Trajectory trajectory;
 
 pros::Imu imu_sensor(5);
+
 
 Logger *logger = Logger::getInstance();
 
@@ -35,7 +36,7 @@ std::string program_type = "autonomous";
 
 // Routes
 std::vector<std::vector<double>> route;
-std::string route_name = "skills"; 
+std::string route_name = "nineball";
 
 RamseteController* ramsete_controller;
 DrivetrainController* drive_controller;
@@ -60,7 +61,7 @@ void initialize()
     left_mg.tare_position_all();
     right_mg.tare_position_all();
 
-    // intake.start_color_sorting("blue");
+    intake.start_color_sorting("red");
 
     imu_sensor.reset();
 
@@ -226,14 +227,24 @@ int joystickCurve(int x, double a = 3.0)
  */
 void opcontrol()
 {
-    ear.set_value(true);
+    ear.input_toggle(true);
     double drivetrain_slow = 0.5;
     while (true)
     {
         int dir = (master.get_analog(ANALOG_LEFT_Y));                // Gets amount forward/backward from left joystick
         int turn = joystickCurve(master.get_analog(ANALOG_RIGHT_X)); // Gets the turn left/right from right joystick
         left_mg.move((dir + turn) * drivetrain_slow);                                    // Sets left motor voltage
-        right_mg.move((dir - turn) * drivetrain_slow);                                   // Sets right motor voltage
+        right_mg.move((dir - turn) * drivetrain_slow);       
+        
+        // if (master.get_digital(DIGITAL_A)){
+        //     if (dir < 0){
+        //         left_mg.move_voltage(-2500);
+        //         right_mg.move_voltage(-2500);
+        //     } else if (dir > 0){
+        //         left_mg.move_voltage(2500);
+        //         right_mg.move_voltage(2500);
+        //     }
+        // }// Sets right motor voltage
 
         if (master.get_digital(DIGITAL_R1)) // Intake but hold
         {
@@ -296,5 +307,4 @@ void opcontrol()
         pros::delay(Config::DT);
         // put on right
     }
-
 }
