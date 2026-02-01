@@ -33,11 +33,9 @@ private:
     pros::Motor& upper_intake_;        ///< Upper intake motor reference
     EnhancedDigitalOut& stopper_ear_; 
     EnhancedDigitalOut& ear_;
-    EnhancedDigitalOut& park_;
 
     // Color detection
     pros::Optical& optical_sensor_;  ///< Optical sensor reference
-    pros::Distance& park_sensor_;     ///< Park sensor reference
     const char* target_color_;       ///< Target color for sorting ("red" or "blue")
     ColorInfo color_params_;         ///< Color detection parameters
     
@@ -47,6 +45,8 @@ private:
     int intake_decay_state_;         ///< State to revert to after decay
     int time_since_state_set_;      ///< Time since last state change
     bool color_sorting_active_ = false; ///< Flag indicating if color sorting is running
+
+    bool skills_;
 
     int intake_max_speed_ = 12000;
     
@@ -65,7 +65,7 @@ public:
      * @param optical_sensor Reference to optical sensor
      */
     Intake(pros::Motor& indexer, pros::Motor& intake, pros::Motor& top_intake, 
-                EnhancedDigitalOut& stopper_ear, EnhancedDigitalOut& ear, EnhancedDigitalOut& park, pros::Optical& optical_sensor, pros::Distance& park_sensor);
+                EnhancedDigitalOut& stopper_ear, EnhancedDigitalOut& ear, pros::Optical& optical_sensor, bool skills);
     
     /**
      * @brief Destructor - ensures proper cleanup

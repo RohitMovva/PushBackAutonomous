@@ -30,6 +30,7 @@ void Odometry::reset()
     rightDrive.tare_position_all();
     lateralEncoder.reset_position();
     imu.tare_rotation();
+    imu.tare_heading();
 }
 
 void Odometry::update()
@@ -120,10 +121,8 @@ void Odometry::update()
     else
     {
         // Straight line approximation when dtheta is small
-        deltaX = forwardDisplacement * cos(currentPose.theta) -
-                 deltaLateral * sin(currentPose.theta);
-        deltaY = forwardDisplacement * sin(currentPose.theta) +
-                 deltaLateral * cos(currentPose.theta);
+        deltaX = forwardDisplacement * cos(currentPose.theta);
+        deltaY = forwardDisplacement * sin(currentPose.theta);
     }
 
     // Logger::getInstance()->log("DeltaX: %f, DeltaY: %f", deltaX, deltaY);

@@ -1,42 +1,52 @@
 #include "main.h"
 
 // Robot config
+bool skills = false;
 pros::Controller master(pros::E_CONTROLLER_MASTER);
-pros::MotorGroup left_mg({-11, -13, -15});
-pros::MotorGroup right_mg({19, 18, 16});
-pros::Motor lower_intake_m(-2);
-pros::Motor middle_intake_m(6);
-pros::Motor upper_intake_m(-3);
+pros::MotorGroup left_mg({-11, -12, -13});
+pros::MotorGroup right_mg({18, 19, 20});
+pros::Motor lower_intake_m(4);
+pros::Motor middle_intake_m(-14);
+pros::Motor upper_intake_m(2);
 pros::Optical color_sort_os(21);
-pros::Distance park_dist(10);
-pros::Distance left_distance_sensor(7);
-pros::Distance right_distance_sensor(9);
+// pros::Distance park_dist(10);
+pros::Distance left_distance_sensor(3);
+pros::Distance right_distance_sensor(5);
+pros::Distance front_distance_sensor(16);
 
-DistanceResetOdometry::DistanceSensor left_sensor(&left_distance_sensor, 5.0, 0.6);
-DistanceResetOdometry::DistanceSensor right_sensor(&right_distance_sensor, 5.0, 0.75);
+DistanceResetOdometry::DistanceSensor left_sensor(&left_distance_sensor, 5.9272, 0);
+DistanceResetOdometry::DistanceSensor right_sensor(&right_distance_sensor, 6.3209, 0);
+DistanceResetOdometry::DistanceSensor front_sensor(&front_distance_sensor, 2.8, -4.5);
 
 EnhancedDigitalOut stopper(8, false);
 EnhancedDigitalOut little_will(7, false);
-EnhancedDigitalOut ear(6, false);
-EnhancedDigitalOut park(5, false);
+EnhancedDigitalOut intake_lift(6, false);
+EnhancedDigitalOut ear2(5, false);
 EnhancedDigitalOut rake(4, false);
-Intake intake(lower_intake_m, middle_intake_m, upper_intake_m, stopper, ear, park, color_sort_os, park_dist);
+Intake intake(lower_intake_m, middle_intake_m, upper_intake_m, stopper, intake_lift, color_sort_os, skills);
 
 Trajectory trajectory;
+Trajectory goal_to_matchloader;
+Trajectory low_goal;
 
-pros::Imu imu_sensor(5);
+pros::Imu imu_sensor(15);
 
 
 Logger *logger = Logger::getInstance();
 
 pros::Rotation side_encoder(5);
 
-// Program types
 std::string program_type = "autonomous";
+
+
 
 // Routes
 std::vector<std::vector<double>> route;
-std::string route_name = "nineball";
+// std::string route_name = "";
+std::string route_name = "sawp2";
+// std::vector< std::string > routes = std::vector< std::string >{"skills6.1", "skills6.2", "skills6.3"};
+std::vector< std::string > routes;
+std::vector< Trajectory > trajectories;
 
 RamseteController* ramsete_controller;
 DrivetrainController* drive_controller;
@@ -61,13 +71,16 @@ void initialize()
     left_mg.tare_position_all();
     right_mg.tare_position_all();
 
-    intake.start_color_sorting("red");
+    if (!skills){
+        ;
+        intake.start_color_sorting("blue");
+    }
 
     imu_sensor.reset();
 
     side_encoder.set_reversed(true);
 
-    DistanceResetOdometry::DistanceSensors distance_sensors = {nullptr, nullptr, left_sensor, right_sensor};
+    DistanceResetOdometry::DistanceSensors distance_sensors = {front_sensor, nullptr, left_sensor, right_sensor};
 
     auto localization = LocalizationManager::create(
         LocalizationType::DISTANCE_RESET_ODOMETRY,
@@ -76,19 +89,31 @@ void initialize()
     );
     
     ramsete_controller = new RamseteController(2.2, 0.7, 4.5 * 12, 5.0, 0.0254000508);
-    drive_controller = new DrivetrainController(2.5, 1.7, 0.3, 3.0, 0.00, 0.0); // TODO try reducing kP
+    drive_controller = new DrivetrainController(2.5, 1.45, 0.275, 3.0, 0.00, 0.0);
 
-    robot = new Robot(&left_mg, &right_mg, &imu_sensor, drive_controller, ramsete_controller, std::move(localization), 
+    robot = new Robot(&left_mg, &right_mg, &imu_sensor, &master, drive_controller, ramsete_controller, std::move(localization), 
                       &little_will, &rake, &intake);
 
     pros::delay(5);
     trajectory.loadFromFile("/usd/routes/" + route_name + ".txt");
+
+    if (routes.size() > 0){
+        for (auto& route: routes){
+            Trajectory traj;
+            traj.loadFromFile("/usd/routes/" + route + ".txt");
+            trajectories.push_back(traj);
+        }
+    }
+
+    goal_to_matchloader.loadFromFile("/usd/routes/goal_to_matchloader.txt");
+    low_goal.loadFromFile("/usd/routes/low_goal.txt");
     // trajectory.loadFromVector();
     // if (trajectory.empty())
     // {
     //     logger->log("Error: Route file is empty or could not be opened.");
     //     return;
     // }
+
 
     logger->log("Robot initialized");
 }
@@ -116,24 +141,25 @@ void competition_initialize()
 
 void testDistanceReset()
 {
-    double sensorReadingMillimeters = right_distance_sensor.get();
+    double sensorReadingMillimeters = front_distance_sensor.get();
     if (sensorReadingMillimeters >= 9999) {
         Logger::getInstance()->logWarning("Invalid right sensor reading: %f", sensorReadingMillimeters);
         return;
     }
 
     double sensorReadingInches = sensorReadingMillimeters / 25.4;
+    pros::lcd::print(0, "sensorReadingInches: %.2f", sensorReadingInches);
     // Logger::getInstance()->log("Right sensor reading: %f in", sensorReadingInches);
 
     // Get current pose and heading
     double robotHeading = imu_sensor.get_heading() * (M_PI / 180.0); // Convert to radians
     pros::lcd::print(1, "Heading: %.2f", robotHeading * (180.0 / M_PI));
 
-    double directionOffset = 270.0; // 90 bc left
+    double directionOffset = 0.0; // 90 bc left
 
     int headingDeg = (int)(robotHeading * (180.0 / M_PI) + directionOffset);
 
-    headingDeg = headingDeg % 360;
+    // headingDeg = headingDeg % 360;
 
     bool resettingX = false;
     double wallSign = 1.0;
@@ -158,13 +184,21 @@ void testDistanceReset()
         wallSign = 1.0;
     }
 
-    if (resettingX) {
+    if (resettingX && int(directionOffset)%180 == 90) {
+        robotHeading += M_PI / 2;
+    } else if (!resettingX && int(directionOffset)%180 == 0){
         robotHeading += M_PI / 2;
     }
 
-    double sensorToWall = std::cos(robotHeading) * sensorReadingInches;
+    if (robotHeading > M_PI){
+        robotHeading -= 2*M_PI;
+    }
+    pros::lcd::print(5, "Heading: %.2f", robotHeading);
 
-    double sensorToRobot = right_sensor.offsetX * std::cos(robotHeading) + right_sensor.offsetY * std::sin(robotHeading);
+    double sensorToWall = std::cos(robotHeading) * sensorReadingInches;
+    pros::lcd::print(4, "Sesnor to wall: %.2f", sensorToWall);
+
+    double sensorToRobot = front_sensor.offsetX * std::cos(robotHeading) + front_sensor.offsetY * std::sin(robotHeading);
 
     double robotToWall = sensorToWall + sensorToRobot;
 
@@ -195,19 +229,27 @@ void autonomous()
 {
     logger->log("Program type: %s", program_type.c_str());
     // trajectory.loadFromFile("/usd/routes/" + route_name + ".txt");
-
+    // ear2.input_toggle(true);
 
     if (program_type == "autonomous")
     {
         logger->log("Starting autonomous");
 
-
-        robot->followTrajectory(trajectory);
+        if (trajectories.size() == 0){
+            robot->followTrajectory(trajectory);
+        } else {
+            robot->followTrajectories(trajectories);
+        }
         // robot->tuneTrackWidth();
     }
 }
 
 int joystickCurve(int x, double a = 3.0)
+{
+    return int(((127.0 * std::pow(std::abs(double(x)), std::abs(a))) / (std::pow(127.0, a))) * (double(x) / std::abs(double(x))));
+}
+
+int joystickCurveSkills(int x, double a = 3.0)
 {
     return int(((127.0 * std::pow(std::abs(double(x)), std::abs(a))) / (std::pow(127.0, a))) * (double(x) / std::abs(double(x))));
 }
@@ -227,84 +269,127 @@ int joystickCurve(int x, double a = 3.0)
  */
 void opcontrol()
 {
-    ear.input_toggle(true);
+    // ear.input_toggle(true);
+    ear2.input_toggle(true);
     double drivetrain_slow = 0.5;
     while (true)
     {
-        int dir = (master.get_analog(ANALOG_LEFT_Y));                // Gets amount forward/backward from left joystick
-        int turn = joystickCurve(master.get_analog(ANALOG_RIGHT_X)); // Gets the turn left/right from right joystick
-        left_mg.move((dir + turn) * drivetrain_slow);                                    // Sets left motor voltage
-        right_mg.move((dir - turn) * drivetrain_slow);       
-        
-        // if (master.get_digital(DIGITAL_A)){
-        //     if (dir < 0){
-        //         left_mg.move_voltage(-2500);
-        //         right_mg.move_voltage(-2500);
-        //     } else if (dir > 0){
-        //         left_mg.move_voltage(2500);
-        //         right_mg.move_voltage(2500);
-        //     }
-        // }// Sets right motor voltage
+        // ------------- START SKILLS DRIVER CONTROLS --------------------
+        if (skills) {
+            int dir = (master.get_analog(ANALOG_LEFT_Y));
+            int turn = joystickCurve(master.get_analog(ANALOG_RIGHT_X));
+            left_mg.move((dir + turn) * drivetrain_slow);
+            right_mg.move((dir - turn) * drivetrain_slow);
 
-        if (master.get_digital(DIGITAL_R1)) // Intake but hold
-        {
-            intake.set_state(1);
+            if (master.get_digital(DIGITAL_R1)) // Intake but hold
+            {
+                intake.set_state(1);
+            }
+            else if (master.get_digital(DIGITAL_R2)) // Outake to bottom goal
+            {
+                intake.set_state(2);
+            }
+            else if (master.get_digital(DIGITAL_L2)) // Outake into middle goal
+            {
+                intake.set_state(3);
+                intake.state_decay(3, 13, 500);
+            }
+            else if (master.get_digital(DIGITAL_L1)) // Outake to high goal
+            {
+                intake.set_state(4);
+            }
+            // else if (master.get_digital(DIGITAL_UP)){
+            //     intake.set_state(7);
+            // }
+            else
+            {
+                intake.set_state(0); // Stop intake if no buttons are pressed
+            }
+
+            // if (master.get_digital(DIGITAL_A)){
+            //     intake.stop_color_sorting();
+            // }
+
+            if (master.get_digital(DIGITAL_RIGHT)){
+                intake.set_intake_speed(6000);
+                drivetrain_slow = 0.5;
+            }
+            else {
+                intake.set_intake_speed(120000);
+                drivetrain_slow = 1.0;
+            }
+
+            if (master.get_digital(DIGITAL_A) && master.get_digital(DIGITAL_L1)){
+                robot->followTrajectory(goal_to_matchloader);
+            } else if (master.get_digital(DIGITAL_A) && master.get_digital(DIGITAL_R1)){
+                robot->followTrajectory(low_goal);
+            }
+
+            intake.set_shift(master.get_digital(DIGITAL_Y));
+
+            intake.update();
+
+            little_will.input_toggle(master.get_digital(DIGITAL_DOWN));
+
+            ear2.input_toggle(master.get_digital(DIGITAL_RIGHT));
+
+
+
+            pros::delay(Config::DT);
+            // ------------- END SKILLS DRIVER CONTROLS --------------------
+        } else {
+            // ------------- START MATCH DRIVER CONTROLS --------------------
+
+            int dir = (master.get_analog(ANALOG_LEFT_Y));
+            int turn = joystickCurve(master.get_analog(ANALOG_RIGHT_X));
+            left_mg.move((dir + turn) * drivetrain_slow);
+            right_mg.move((dir - turn) * drivetrain_slow);
+
+            if (master.get_digital(DIGITAL_R1)) // Intake but hold
+            {
+                intake.set_state(1);
+            }
+            else if (master.get_digital(DIGITAL_R2)) // Outake to bottom goal
+            {
+                intake.set_state(2);
+            }
+            else if (master.get_digital(DIGITAL_DOWN)) // Outake into middle goal
+            {
+                intake.set_state(3);
+            }
+            else if (master.get_digital(DIGITAL_L1)) // Outake to high goal
+            {
+                intake.set_state(4);
+            }
+            else
+            {
+                intake.set_state(0); // Stop intake if no buttons are pressed
+            }
+
+            if (master.get_digital(DIGITAL_A)){
+                intake.stop_color_sorting();
+            }
+
+            if (master.get_digital(DIGITAL_RIGHT)){
+                intake.set_intake_speed(6000);
+                drivetrain_slow = 0.5;
+            }
+            else {
+                intake.set_intake_speed(120000);
+                drivetrain_slow = 1.0;
+            }
+
+            intake.set_shift(master.get_digital(DIGITAL_Y));
+
+            intake.update();
+
+            little_will.input_toggle(master.get_digital(DIGITAL_RIGHT));
+
+            intake_lift.set_state(master.get_digital(DIGITAL_B));
+            ear2.set_state(!master.get_digital(DIGITAL_L2));
+
+            pros::delay(Config::DT);
         }
-        else if (master.get_digital(DIGITAL_R2)) // Outake to bottom goal
-        {
-            intake.set_state(2);
-        }
-        else if (master.get_digital(DIGITAL_L2)) // Outake into middle goal
-        {
-            intake.set_state(3);
-        }
-        else if (master.get_digital(DIGITAL_L1)) // Outake to high goal
-        {
-            intake.set_state(4);
-        }
-        else
-        {
-            intake.set_state(0); // Stop intake if no buttons are pressed
-        }
-
-        if (master.get_digital(DIGITAL_X)) 
-        {
-            intake.park();
-        }
-
-        if (master.get_digital(DIGITAL_A)){
-            intake.stop_color_sorting();
-        }
-
-        if (master.get_digital(DIGITAL_RIGHT)){
-            intake.set_intake_speed(6000);
-            drivetrain_slow = 0.5;
-        }
-        else {
-            intake.set_intake_speed(120000);
-            drivetrain_slow = 1.0;
-        }
-
-        if (master.get_digital(DIGITAL_UP) && !park.get_state()){
-            park.set_value(false);
-        }
-
-        intake.set_shift(master.get_digital(DIGITAL_Y));
-
-        intake.update();
-
-        little_will.input_toggle(master.get_digital(DIGITAL_DOWN));
-
-        ear.input_toggle(master.get_digital(DIGITAL_B));
-
-        // pros::lcd::print(2, "Left Dist: %.2d", left_distance_sensor.get());
-        // pros::lcd::print(3, "Right Dist: %.2d", right_distance_sensor.get());
-
-        // testDistanceReset();
-
-
-
-        pros::delay(Config::DT);
-        // put on right
+        // ------------- END MATCH DRIVER CONTROLS --------------------
     }
 }

@@ -41,11 +41,15 @@ private:
     pros::MotorGroup *m_leftDrivetrain;            ///< Left side drivetrain motor group
     pros::MotorGroup *m_rightDrivetrain;           ///< Right side drivetrain motor group
     pros::Imu *m_inertial;                         ///< Inertial sensor for heading and orientation
+    pros::Controller *m_controller;
     DrivetrainController *m_driveController;       ///< Drivetrain velocity controller
     RamseteController *m_ramseteController;        ///< Ramsete controller for trajectory following
     std::unique_ptr<ILocalization> m_localization; ///< Localization manager for managing localization systems
     bool m_isFollowingTrajectory;                  ///< Flag indicating if trajectory following is active
     int m_min_voltage = 0;                          ///< Voltage to keep bot from sliding back from little will
+
+    bool m_feedbackEnabled;
+
 
 
     EnhancedDigitalOut *little_will; ///< Digital output for little will
@@ -79,6 +83,7 @@ public:
      * @param leftDrivetrain Pointer to left side motor group
      * @param rightDrivetrain Pointer to right side motor group
      * @param inertial Pointer to inertial sensor for heading and orientation
+     * @param controller Pointer to master controller
      * @param driveController Pointer to drivetrain velocity controller
      * @param ramseteController Pointer to Ramsete controller for path following
      * @param localization Unique pointer to localization interface
@@ -91,6 +96,7 @@ public:
     Robot(pros::MotorGroup *leftDrivetrain,
           pros::MotorGroup *rightDrivetrain,
           pros::Imu *inertial,
+          pros::Controller *controller,
           DrivetrainController *driveController,
           RamseteController *ramseteController,
           std::unique_ptr<ILocalization> localization,
@@ -125,7 +131,10 @@ public:
      * @warning Ensure the trajectory is within the robot's physical limits
      *          and field boundaries before execution
      */
-    bool followTrajectory(Trajectory &trajectory);
+    bool followTrajectory(Trajectory &trajectory, std::optional<Pose> start_pose = std::nullopt);
+
+    bool followTrajectories(std::vector<Trajectory> &trajectories);
+
 
     /**
      * @brief Check if robot is currently following a trajectory

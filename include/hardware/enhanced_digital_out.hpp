@@ -27,6 +27,9 @@ public:
      */
     bool get_state() const;
 
+    bool set_state(bool new_state);
+
+
     /**
      * Pulses the output for a specified duration
      *

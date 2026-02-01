@@ -15,13 +15,14 @@ Robot::Robot()
 Robot::Robot(pros::MotorGroup *leftDrivetrain,
              pros::MotorGroup *rightDrivetrain,
              pros::Imu *inertial,
+             pros::Controller *controller,
              DrivetrainController *driveController,
              RamseteController *ramseteController,
              std::unique_ptr<ILocalization> localization,
              EnhancedDigitalOut *littleWill,
              EnhancedDigitalOut *rake,
              Intake *intake)
-    : m_leftDrivetrain(leftDrivetrain), m_rightDrivetrain(rightDrivetrain), m_inertial(inertial), m_driveController(driveController), m_ramseteController(ramseteController), m_localization(std::move(localization)), m_isFollowingTrajectory(false), little_will(littleWill), rake(rake),m_intake(intake)
+    : m_leftDrivetrain(leftDrivetrain), m_rightDrivetrain(rightDrivetrain), m_controller(controller), m_inertial(inertial), m_driveController(driveController), m_ramseteController(ramseteController), m_localization(std::move(localization)), m_isFollowingTrajectory(false), little_will(littleWill), rake(rake),m_intake(intake)
 {
     // Validate all pointer parameters
     if (!leftDrivetrain)
@@ -36,6 +37,10 @@ Robot::Robot(pros::MotorGroup *leftDrivetrain,
     {
         throw std::invalid_argument("Inertial sensor pointer cannot be null");
     }
+    if (!controller)
+    {
+        throw std::invalid_argument("Controller pointer cannot be null");
+    }
     if (!driveController)
     {
         throw std::invalid_argument("Drive controller pointer cannot be null");
@@ -48,6 +53,7 @@ Robot::Robot(pros::MotorGroup *leftDrivetrain,
     {
         throw std::invalid_argument("Localization object cannot be null");
     }
+    m_feedbackEnabled = true;
 }
 
 Robot::~Robot()
@@ -81,11 +87,11 @@ void Robot::stopTrajectory()
     // Stop both drivetrain sides
     if (m_leftDrivetrain)
     {
-        m_leftDrivetrain->brake();
+        m_leftDrivetrain->move_voltage(0);
     }
     if (m_rightDrivetrain)
     {
-        m_rightDrivetrain->brake();
+        m_rightDrivetrain->move_voltage(0);
     }
 }
 
@@ -146,25 +152,50 @@ void Robot::processTrajectory(const TrajectoryPoint &tp)
     // Logger::getInstance()->log("MP Output: %f %f", tp.linear_vel, tp.angular_vel);
 
     // Convert RAMSETE output to wheel velocities using configuration
-    auto wheel_velocities = m_ramseteController->calculate_wheel_velocities(
-        ramsete_output[0],              // linear velocity
-        ramsete_output[1],              // angular velocity
-        Config::WHEEL_DIAMETER,         // wheel diameter from config
-        Config::GEAR_RATIO,             // gear ratio from config
-        Config::WHEEL_BASE_WIDTH        // track width from config
-    );
+    std::vector<double> wheel_velocities;
+    if (m_feedbackEnabled){
+      wheel_velocities = m_ramseteController->calculate_wheel_velocities(
+            ramsete_output[0],              // linear velocity
+            ramsete_output[1],              // angular velocity
+            Config::WHEEL_DIAMETER,         // wheel diameter from config
+            Config::GEAR_RATIO,             // gear ratio from config
+            Config::WHEEL_BASE_WIDTH        // track width from config
+            );
+    } else {
+        wheel_velocities = m_ramseteController->calculate_wheel_velocities(
+            tp.linear_vel,              // linear velocity
+            tp.angular_vel,              // angular velocity
+            Config::WHEEL_DIAMETER,         // wheel diameter from config
+            Config::GEAR_RATIO,             // gear ratio from config
+            Config::WHEEL_BASE_WIDTH        // track width from config
+            );  
+    }
+    
     Logger::getInstance()->log("Left wheel velocities: %f %f", wheel_velocities[0], m_localization->getLeftVelocity().linear);
     Logger::getInstance()->log("Right wheel velocities: %f %f", wheel_velocities[1], m_localization->getRightVelocity().linear);
 
     // Calculate motor voltages using drivetrain controller
-    auto voltages = m_driveController->calculateVoltages(
-        wheel_velocities[0],                       // left velocity setpoint
-        wheel_velocities[1],                       // right velocity setpoint
-        m_localization->getLeftVelocity().linear,  // current left velocity
-        m_localization->getRightVelocity().linear, // current right velocity
-        left_accel,                                // left acceleration
-        right_accel                                // right acceleration
-    );
+
+    DrivetrainController::MotorVoltages voltages;
+    if (m_feedbackEnabled) {
+        voltages = m_driveController->calculateVoltages(
+            wheel_velocities[0],                       // left velocity setpoint
+            wheel_velocities[1],                       // right velocity setpoint
+            m_localization->getLeftVelocity().linear,  // current left velocity
+            m_localization->getRightVelocity().linear, // current right velocity
+            left_accel,                                // left acceleration
+            right_accel                                // right acceleration
+        );
+    } else {
+        voltages = m_driveController->calculateVoltages(
+            wheel_velocities[0],                       // left velocity setpoint
+            wheel_velocities[1],                       // right velocity setpoint
+            wheel_velocities[0],  // current left velocity
+            wheel_velocities[1], // current right velocity
+            left_accel,                                // left acceleration
+            right_accel                                // right acceleration
+        );
+    }
 
     if (std::abs(voltages.left) == 0)
     {
@@ -201,13 +232,16 @@ void Robot::processAction(const ActionPoint &ap)
     int intake_action = static_cast<int>(ap.actions[0]); // Convert to int for easier handling
     m_intake->set_state(intake_action); // Set intake state based on action
 
-    if (ap.actions[1] == 1.0) // Example action check for little will
+    if (intake_action == 3){
+        m_intake->state_decay(3, 13, 500);
+    }
+
+    if (ap.actions[1] == 1.0)
     {
         little_will->toggle();
     }
-    if (ap.actions[2] == 1.0) // Example action check for trapdoor
+    if (ap.actions[2] == 1.0)
     {
-        // Cast to the specific type you know it is
         if (auto distance_reset_odometry = dynamic_cast<DistanceResetOdometry*>(m_localization.get())) {
             distance_reset_odometry->resetLeft();
         } else {
@@ -225,7 +259,11 @@ void Robot::processAction(const ActionPoint &ap)
 
     if (ap.actions[4] != 0.0)
     {
-        m_intake->state_decay(4, 1, ap.actions[4] * 1000);
+        // if (ap.actions[4] == 10){
+        //     m_intake->state_decay(ap.actions[0], 1, ap.actions[4] * 1000);
+        // } else {
+        m_intake->state_decay(ap.actions[0], 8, ap.actions[4] * 1000);
+        // }
     }
 
     if (ap.actions[5] != 0.0)
@@ -242,7 +280,7 @@ void Robot::processAction(const ActionPoint &ap)
     // }
 
     if (ap.actions[6] == 1.0){
-        rake->toggle();
+        m_feedbackEnabled = !m_feedbackEnabled;
     }
 
     if (ap.actions[7] != 0.0){
@@ -262,7 +300,7 @@ void Robot::processAction(const ActionPoint &ap)
     }
 }
 
-bool Robot::followTrajectory(Trajectory &trajectory)
+bool Robot::followTrajectory(Trajectory &trajectory, std::optional<Pose> start_pose)
 {
     Logger::getInstance()->log("Starting trajectory following");
     if (!isInitialized())
@@ -275,8 +313,8 @@ bool Robot::followTrajectory(Trajectory &trajectory)
         Logger::getInstance()->logError("Trajectory is empty, cannot follow");
         return false;
     }
+    trajectory.reset();
 
-    // Set the flag to indicate we are following a trajectory
     m_isFollowingTrajectory = true;
 
     Logger::getInstance()->log("Following trajectory with %s localization",
@@ -284,14 +322,19 @@ bool Robot::followTrajectory(Trajectory &trajectory)
 
     uint32_t loop_start_time = pros::millis();
 
-
+    m_localization->reset();
     size_t trajectory_index = 0;
     try
     {
         const TrajectoryPoint &first_trajectory_point = std::get<TrajectoryPoint>(trajectory.getByIndex(1));
-
+        
         Pose initial_pos = {first_trajectory_point.x, first_trajectory_point.y, first_trajectory_point.theta};
+        if (start_pose.has_value()) {
+            initial_pos = start_pose.value();
+        }
         resetPosition(initial_pos);
+
+        
         Logger::getInstance()->log("Initial pose: %f %f %f", initial_pos.x, initial_pos.y, initial_pos.theta);
     }
     catch (const std::bad_variant_access &e)
@@ -306,6 +349,11 @@ bool Robot::followTrajectory(Trajectory &trajectory)
     while (trajectory.hasNext())
     {
         // Logger::getInstance()->log("Processing trajectory point %zu", trajectory_index);
+        if (m_controller->get_digital(DIGITAL_X)){
+            stopTrajectory();
+            trajectory.reset();
+            break;
+        }
 
         // Update localization
         m_localization->update();
@@ -332,14 +380,27 @@ bool Robot::followTrajectory(Trajectory &trajectory)
     m_leftDrivetrain->move(0);
     m_rightDrivetrain->move(0);
 
-    // m_leftDrivetrain->move(12);
-    // m_rightDrivetrain->move(12);
-
     m_isFollowingTrajectory = false;
 
     Logger::getInstance()->log("Trajectory following completed");
     return true; // Indicate that trajectory following completed successfully
 }
+
+bool Robot::followTrajectories(std::vector<Trajectory> &trajectories)
+{
+    std::optional<Pose> next_start_pose = std::nullopt;
+
+    for (Trajectory& traj : trajectories)
+    {
+        if (!this->followTrajectory(traj, next_start_pose)) {
+            return false;
+        }
+
+        next_start_pose = this->m_localization->getPose();
+    }
+    return true;
+}
+
 
 void Robot::tuneTrackWidth()
 {

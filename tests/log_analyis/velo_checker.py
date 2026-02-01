@@ -71,7 +71,7 @@ right_wheel_vel = right_wheel_vel[:min_length]
 timestamps = timestamps[:min_length]
 
 # Robot parameters (adjust these based on your robot)
-wheel_radius = 2.75/2  # meters
+wheel_radius = 3.25/2  # meters
 wheel_separation = 12.7  # meters
 
 # Calculate linear and angular velocities from wheel velocities

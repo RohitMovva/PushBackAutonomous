@@ -16,6 +16,14 @@ bool EnhancedDigitalOut::get_state() const {
     return current_state;
 }
 
+bool EnhancedDigitalOut::set_state(bool new_state) {
+    if (current_state != new_state){
+        current_state = new_state;
+        return set_value(new_state);
+    }
+    return false;
+}
+
 bool EnhancedDigitalOut::pulse(std::uint32_t pulse_duration_ms, bool new_state) {
     bool original_state = current_state;
     bool pulse_state = new_state;

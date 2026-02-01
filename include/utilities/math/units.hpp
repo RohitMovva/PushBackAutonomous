@@ -171,7 +171,7 @@ namespace Units
     {
         // Wheel diameters (inches)
         constexpr double WHEEL_2_75_INCH = 2.76;
-        constexpr double WHEEL_3_25_INCH = 3.25;
+        constexpr double WHEEL_3_25_INCH = 3.18;
         constexpr double WHEEL_4_INCH = 4.0;
 
         // Gear ratios (in output/input)

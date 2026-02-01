@@ -68,10 +68,11 @@ void DistanceResetOdometry::reset(const DistanceSensor& sensor, double sensor_an
 
     Logger::getInstance()->log("resettingX: %d, wallSign: %f", resettingX, wallSign);
 
-    if (resettingX) {
+        if (resettingX && int(sensor_angle)%180 == 90) {
+        robotHeading += M_PI / 2;
+    } else if (!resettingX && int(sensor_angle)%180 == 0){
         robotHeading += M_PI / 2;
     }
-
     double sensorToWall = std::cos(robotHeading) * sensorReadingInches;
 
     double sensorToCenter = sensor.offsetX * std::cos(robotHeading) + sensor.offsetY * std::sin(robotHeading);

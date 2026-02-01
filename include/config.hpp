@@ -6,7 +6,7 @@
 namespace Config
 {
     // Robot config
-    constexpr double WHEEL_DIAMETER = Units::Constants::WHEEL_2_75_INCH;                      ///< Wheel diameter in inches
+    constexpr double WHEEL_DIAMETER = Units::Constants::WHEEL_3_25_INCH;                      ///< Wheel diameter in inches
     constexpr double WHEEL_CIRCUMFERENCE = WHEEL_DIAMETER * M_PI;                          ///< Wheel circumference in inches
     constexpr double TICKS_PER_ROTATION = Units::Constants::V5_BLUE_MOTOR_TICKS_PER_ROTATION; ///< Encoder ticks per rotation for blue cartridges
     constexpr double GEAR_RATIO = 36.0 / 48.0;                                           ///< Gear ratio of the drivetrain
