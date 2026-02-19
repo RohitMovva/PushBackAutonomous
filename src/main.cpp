@@ -1,7 +1,7 @@
 #include "main.h"
 
 // Robot config
-bool skills = false;
+bool skills = true;
 pros::Controller master(pros::E_CONTROLLER_MASTER);
 pros::MotorGroup left_mg({-11, -12, -13});
 pros::MotorGroup right_mg({18, 19, 20});
@@ -42,10 +42,10 @@ std::string program_type = "autonomous";
 
 // Routes
 std::vector<std::vector<double>> route;
-// std::string route_name = "";
-std::string route_name = "sawp2";
-// std::vector< std::string > routes = std::vector< std::string >{"skills6.1", "skills6.2", "skills6.3"};
-std::vector< std::string > routes;
+std::string route_name = "";
+// std::string route_name = "low_7ball";
+std::vector< std::string > routes = std::vector< std::string >{"skills7.1", "skills7.2", "skills7.3"};
+// std::vector< std::string > routes;
 std::vector< Trajectory > trajectories;
 
 RamseteController* ramsete_controller;
@@ -73,7 +73,7 @@ void initialize()
 
     if (!skills){
         ;
-        intake.start_color_sorting("blue");
+        intake.start_color_sorting("red");
     }
 
     imu_sensor.reset();
@@ -233,6 +233,54 @@ void autonomous()
 
     if (program_type == "autonomous")
     {
+        // intake.set_state(1);
+        // intake.update();
+        // left_mg.move_voltage(3000);
+        // right_mg.move_voltage(3000);
+        // intake.update();
+        // pros::delay(500);
+        // left_mg.move_voltage(-3000);
+        // right_mg.move_voltage(-3000);
+        // pros::delay(200);
+        // left_mg.move_voltage(0);
+        // right_mg.move_voltage(0);
+        // pros::delay(500);
+        // for (int i = -1; i < 2; i +=2){
+        //     left_mg.move_voltage(3000*i);
+        //     right_mg.move_voltage(3000*i*-1);
+        //     pros::delay(250);
+        //     if (i==1)pros::delay(150);
+        // }
+        // left_mg.move_voltage(3000);
+        // right_mg.move_voltage(3000);
+        // pros::delay(500);
+        // for (int i = -1; i < 2; i +=2){
+        //     left_mg.move_voltage(3000*i);
+        //     right_mg.move_voltage(3000*i*-1);
+        //     pros::delay(250);
+        //     if (i==1)pros::delay(100);
+        // }
+        // left_mg.move_voltage(3000);
+        // right_mg.move_voltage(3000);
+        // pros::delay(500);
+        // left_mg.move_voltage(-5000);
+        // right_mg.move_voltage(-5000);
+        // pros::delay(1000);
+
+        // left_mg.move_voltage(2000);
+        // right_mg.move_voltage(2000);
+        // pros::delay(1000);
+
+        // left_mg.move_voltage(0);
+        // right_mg.move_voltage(0);
+        // left_mg.move_voltage(8000);
+        // right_mg.move_voltage(8000);
+        // pros::delay(500);
+        // for (int i = -1; i < 2; i +=2){
+        //     left_mg.move_voltage(5000*i);
+        //     right_mg.move_voltage(5000*i*-1);
+        //     pros::delay(250);
+        // }
         logger->log("Starting autonomous");
 
         if (trajectories.size() == 0){
@@ -242,6 +290,8 @@ void autonomous()
         }
         // robot->tuneTrackWidth();
     }
+    // left_mg.set_brake_mode_all(MOTOR_BRAKE_BRAKE);
+    // right_mg.set_brake_mode_all(MOTOR_BRAKE_BRAKE);
 }
 
 int joystickCurve(int x, double a = 3.0)
@@ -251,9 +301,8 @@ int joystickCurve(int x, double a = 3.0)
 
 int joystickCurveSkills(int x, double a = 3.0)
 {
-    return int(((127.0 * std::pow(std::abs(double(x)), std::abs(a))) / (std::pow(127.0, a))) * (double(x) / std::abs(double(x))));
+    return int(((std::pow((double(x) / 5.7), 2.0) -std::abs(std::pow((double(x) / 5.7), 3.0) / 6.0) +(std::pow((double(x) / 5.7), 4.0)/120.0) )*double(x)) / (3.0 * std::abs(double(x))));
 }
-
 /**
  * Runs the operator control code. This function will be started in its own task
  * with the default priority and stack size whenever the robot is enabled via
@@ -272,12 +321,14 @@ void opcontrol()
     // ear.input_toggle(true);
     ear2.input_toggle(true);
     double drivetrain_slow = 0.5;
+    left_mg.set_brake_mode_all(MOTOR_BRAKE_COAST);
+    right_mg.set_brake_mode_all(MOTOR_BRAKE_COAST);
     while (true)
     {
         // ------------- START SKILLS DRIVER CONTROLS --------------------
         if (skills) {
             int dir = (master.get_analog(ANALOG_LEFT_Y));
-            int turn = joystickCurve(master.get_analog(ANALOG_RIGHT_X));
+            int turn = joystickCurveSkills(master.get_analog(ANALOG_RIGHT_X));
             left_mg.move((dir + turn) * drivetrain_slow);
             right_mg.move((dir - turn) * drivetrain_slow);
 
@@ -291,8 +342,8 @@ void opcontrol()
             }
             else if (master.get_digital(DIGITAL_L2)) // Outake into middle goal
             {
-                intake.set_state(3);
-                intake.state_decay(3, 13, 500);
+                intake.set_state(15);
+                intake.state_decay(15, 16, 1250);
             }
             else if (master.get_digital(DIGITAL_L1)) // Outake to high goal
             {

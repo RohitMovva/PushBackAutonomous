@@ -233,7 +233,8 @@ void Robot::processAction(const ActionPoint &ap)
     m_intake->set_state(intake_action); // Set intake state based on action
 
     if (intake_action == 3){
-        m_intake->state_decay(3, 13, 500);
+        m_intake->set_state(15);
+        m_intake->state_decay(15, 16, 1250);
     }
 
     if (ap.actions[1] == 1.0)

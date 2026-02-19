@@ -29,6 +29,9 @@ void Intake::set_state(int state) {
         intake_decay_ms_ = 0;
         time_since_state_set_ = 0;
     }
+    // if ((intake_state_ == 15 || intake_state_ == 16 || intake_state_ == 17)){
+    //     return;
+    // }
 
     if (intake_decay_ms_ > 0 && state != 8) {
         return; // Ignore state changes during decay
@@ -56,9 +59,9 @@ int Intake::get_state() const {
 
 void Intake::apply_state_motors() {   
     pros::lcd::print(0, "intake state: %d", intake_state_);
-        if (intake_state_ != 10){
-            ear_.set_value(false);
-        }
+    if (intake_state_ != 3 && skills_){
+        ear_.set_value(false);
+    }
     switch (intake_state_) {
         case 0:
             // Stop all motors
@@ -77,11 +80,13 @@ void Intake::apply_state_motors() {
         case 2: // Outtake to low goal
             // SLOW SKILLS CONTROLS
             if (skills_) {
-                lower_intake_.move_velocity(-50);
+                lower_intake_.move_velocity(-30);
                 upper_intake_.move_velocity(5);
 
                 middle_intake_.move_voltage(-intake_max_speed_);
                 stopper_ear_.set_value(true);
+                ear_.set_value(true);
+                
             } else {
                 lower_intake_.move_voltage(-intake_max_speed_);
                 upper_intake_.move_velocity(5);
@@ -96,7 +101,7 @@ void Intake::apply_state_motors() {
             if (skills_){
                 lower_intake_.move_voltage(intake_max_speed_);
                 middle_intake_.move_velocity(75);
-                upper_intake_.move_velocity(-40);
+                upper_intake_.move_velocity(-30);
                 // upper_intake_.move_voltage(-3000);
 
                 stopper_ear_.set_value(false);
@@ -137,7 +142,7 @@ void Intake::apply_state_motors() {
 
         case 8:
             // lower_intake_.move_voltage(-intake_max_speed_);
-            upper_intake_.move_voltage(-intake_max_speed_);
+            upper_intake_.move_velocity(-50);
 
             middle_intake_.move_voltage(-intake_max_speed_);
             stopper_ear_.set_value(true);
@@ -152,7 +157,7 @@ void Intake::apply_state_motors() {
             break;
 
         case 10:
-            lower_intake_.move_velocity(-100);
+            lower_intake_.move_velocity(-75);
             upper_intake_.move_velocity(5);
 
             middle_intake_.move_voltage(-intake_max_speed_);
@@ -181,6 +186,50 @@ void Intake::apply_state_motors() {
             upper_intake_.move_velocity(-40);
             stopper_ear_.set_value(false);
 
+            break;
+
+        case 14:
+            lower_intake_.move_voltage(intake_max_speed_);
+            // middle_intake_.move_velocity(-75);
+            // upper_intake_.move_velocity(-40);
+            stopper_ear_.set_value(true);
+
+            break;
+
+        case 15:
+            lower_intake_.move_voltage(intake_max_speed_);
+            middle_intake_.move_velocity(110);
+            upper_intake_.move_velocity(-63);
+            if (intake_decay_ms_ > 1150){
+                middle_intake_.move_voltage(0);
+            }
+            // upper_intake_.move_voltage(-3000);
+
+            stopper_ear_.set_value(false);
+            break;
+        
+        case 16:
+            lower_intake_.move_voltage(intake_max_speed_);
+            middle_intake_.move_velocity(100);
+            upper_intake_.move_velocity(-50);
+            if (intake_decay_ms_ > 400 && intake_decay_ms_ < 650){
+                middle_intake_.move_velocity(-60);
+            }
+            // upper_intake_.move_voltage(-3000);
+
+            stopper_ear_.set_value(false);
+            break;
+        
+        case 17:
+            lower_intake_.move_voltage(intake_max_speed_);
+            middle_intake_.move_velocity(100);
+            // if (intake_decay_ms_ > 600 && intake_decay_ms_ < 850){
+            //     middle_intake_.move_velocity(-60);
+            // }
+            upper_intake_.move_velocity(-18);
+            // upper_intake_.move_voltage(-3000);
+
+            stopper_ear_.set_value(false);
             break;
 
         default:
@@ -212,21 +261,21 @@ bool Intake::is_color_sorting_active() const {
 
 void Intake::update(){
     // Antijam
-    if (intake_state_ > 0 && middle_intake_.get_actual_velocity() == 0 && time_since_state_set_ > 250 && intake_state_ != 13 && intake_state_ != 3){
-        intake_decay_state_ = intake_state_;
-        if (intake_state_ == 2 || intake_state_ == 10) {
-            set_state(1);
-        } else {
-            set_state(2);
-        }
-        intake_decay_ms_ = 170;
-    }
+    // if (intake_state_ > 0 && middle_intake_.get_actual_velocity() == 0 && time_since_state_set_ > 250 && intake_state_ != 13 && intake_state_ != 3){
+    //     intake_decay_state_ = intake_state_;
+    //     if (intake_state_ == 2 || intake_state_ == 10) {
+    //         set_state(1);
+    //     } else {
+    //         set_state(8);
+    //     }
+    //     intake_decay_ms_ = 170;
+    // }
 
-    if (intake_state_ == 3 && fabs(upper_intake_.get_actual_velocity()) <= 10 && time_since_state_set_ > 100){
-        intake_decay_state_ = intake_state_;
-        set_state(12);
-        intake_decay_ms_ = 200;
-    }
+    // if (intake_state_ == 3 && fabs(upper_intake_.get_actual_velocity()) <= 10 && time_since_state_set_ > 250){
+    //     intake_decay_state_ = intake_state_;
+    //     set_state(12);
+    //     intake_decay_ms_ = 200;
+    // }
 
 
     // if (intake_state_ > 0 && lower_intake_.get_actual_velocity() == 0 && time_since_state_set_ > 250){
@@ -283,21 +332,37 @@ void Intake::update(){
 
     time_since_state_set_ += 10;
 
+    // intake_decay_ms_ -= 10;
     if (intake_decay_ms_ > 0) {
         intake_decay_ms_ -= 10;
         if (intake_decay_ms_ <= 0) {
             intake_decay_ms_ = 0;
             intake_state_ = intake_decay_state_;
             time_since_state_set_ = 0;
-
+            pros::lcd::print(6, "set state to %d", intake_decay_state_);
             if (skills_ && intake_state_ == 3){
                 intake_decay_state_ = 13;
                 intake_decay_ms_ = 600;
             }
-            else if (skills_ && intake_state_ == 13){
+            else if (skills_ && (intake_state_ == 13 || intake_state_ == 12)){
                 intake_decay_state_ = 3;
                 intake_decay_ms_ = 100;
             }
+
+            if (skills_ && intake_state_ == 16){
+                intake_decay_state_ = 17;
+                intake_decay_ms_ = 1200;
+            }
+
+            if (skills_ && intake_state_ == 17){
+                intake_decay_state_ = 0;
+                intake_decay_ms_ = 1500;
+            }
+
+            // if (skills_ && intake_state_ == 16){
+            //     intake_decay_state_ = 16;
+            //     intake_decay_ms_ = 400;
+            // }
         }
     }
 
