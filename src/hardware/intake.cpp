@@ -67,7 +67,7 @@ void Intake::apply_state_motors() {
             // Stop all motors
             lower_intake_.move_voltage(0);
             middle_intake_.move_voltage(0);
-            upper_intake_.move_voltage(0);
+            upper_intake_.move_voltage(intake_max_speed_/4);
             break;
             
         case 1: // Intake
@@ -80,7 +80,7 @@ void Intake::apply_state_motors() {
         case 2: // Outtake to low goal
             // SLOW SKILLS CONTROLS
             if (skills_) {
-                lower_intake_.move_velocity(-30);
+                lower_intake_.move_velocity(-40);
                 upper_intake_.move_velocity(5);
 
                 middle_intake_.move_voltage(-intake_max_speed_);
@@ -100,7 +100,7 @@ void Intake::apply_state_motors() {
             // SLOW SKILLS CONTROLS
             if (skills_){
                 lower_intake_.move_voltage(intake_max_speed_);
-                middle_intake_.move_velocity(75);
+                middle_intake_.move_voltage(intake_max_speed_);
                 upper_intake_.move_velocity(-30);
                 // upper_intake_.move_voltage(-3000);
 
@@ -198,11 +198,11 @@ void Intake::apply_state_motors() {
 
         case 15:
             lower_intake_.move_voltage(intake_max_speed_);
-            middle_intake_.move_velocity(110);
-            upper_intake_.move_velocity(-63);
-            if (intake_decay_ms_ > 1150){
-                middle_intake_.move_voltage(0);
-            }
+            middle_intake_.move_voltage(intake_max_speed_);
+            upper_intake_.move_velocity(-50);
+            // if (intake_decay_ms_ > 1150){
+            //     middle_intake_.move_voltage(0);
+            // }
             // upper_intake_.move_voltage(-3000);
 
             stopper_ear_.set_value(false);
@@ -210,11 +210,11 @@ void Intake::apply_state_motors() {
         
         case 16:
             lower_intake_.move_voltage(intake_max_speed_);
-            middle_intake_.move_velocity(100);
-            upper_intake_.move_velocity(-50);
-            if (intake_decay_ms_ > 400 && intake_decay_ms_ < 650){
-                middle_intake_.move_velocity(-60);
-            }
+            middle_intake_.move_voltage(intake_max_speed_);
+            upper_intake_.move_velocity(-35);
+            // if (intake_decay_ms_ > 400 && intake_decay_ms_ < 650){
+            //     middle_intake_.move_velocity(-60);
+            // }
             // upper_intake_.move_voltage(-3000);
 
             stopper_ear_.set_value(false);
@@ -222,14 +222,20 @@ void Intake::apply_state_motors() {
         
         case 17:
             lower_intake_.move_voltage(intake_max_speed_);
-            middle_intake_.move_velocity(100);
+            middle_intake_.move_velocity(intake_max_speed_);
             // if (intake_decay_ms_ > 600 && intake_decay_ms_ < 850){
             //     middle_intake_.move_velocity(-60);
             // }
-            upper_intake_.move_velocity(-18);
+            upper_intake_.move_velocity(-25);
             // upper_intake_.move_voltage(-3000);
 
             stopper_ear_.set_value(false);
+            break;
+
+        case 18:
+            lower_intake_.move_velocity(-100);
+            upper_intake_.move_velocity(-30);
+            middle_intake_.move_voltage(-intake_max_speed_);
             break;
 
         default:
@@ -351,7 +357,7 @@ void Intake::update(){
 
             if (skills_ && intake_state_ == 16){
                 intake_decay_state_ = 17;
-                intake_decay_ms_ = 1200;
+                intake_decay_ms_ = 700;
             }
 
             if (skills_ && intake_state_ == 17){

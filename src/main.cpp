@@ -1,13 +1,13 @@
 #include "main.h"
 
 // Robot config
-bool skills = true;
+bool skills = false;
 pros::Controller master(pros::E_CONTROLLER_MASTER);
 pros::MotorGroup left_mg({-11, -12, -13});
 pros::MotorGroup right_mg({18, 19, 20});
 pros::Motor lower_intake_m(4);
 pros::Motor middle_intake_m(-14);
-pros::Motor upper_intake_m(2);
+pros::Motor upper_intake_m(1);
 pros::Optical color_sort_os(21);
 // pros::Distance park_dist(10);
 pros::Distance left_distance_sensor(3);
@@ -42,10 +42,10 @@ std::string program_type = "autonomous";
 
 // Routes
 std::vector<std::vector<double>> route;
-std::string route_name = "";
-// std::string route_name = "low_7ball";
-std::vector< std::string > routes = std::vector< std::string >{"skills7.1", "skills7.2", "skills7.3"};
-// std::vector< std::string > routes;
+// std::string route_name = "";
+std::string route_name = "low_7ball";
+// std::vector< std::string > routes = std::vector< std::string >{"skills8.1", "skills8.2"};
+std::vector< std::string > routes;
 std::vector< Trajectory > trajectories;
 
 RamseteController* ramsete_controller;
@@ -229,7 +229,7 @@ void autonomous()
 {
     logger->log("Program type: %s", program_type.c_str());
     // trajectory.loadFromFile("/usd/routes/" + route_name + ".txt");
-    // ear2.input_toggle(true);
+    ear2.input_toggle(true);
 
     if (program_type == "autonomous")
     {
@@ -343,7 +343,7 @@ void opcontrol()
             else if (master.get_digital(DIGITAL_L2)) // Outake into middle goal
             {
                 intake.set_state(15);
-                intake.state_decay(15, 16, 1250);
+                intake.state_decay(15, 16, 600);
             }
             else if (master.get_digital(DIGITAL_L1)) // Outake to high goal
             {
@@ -392,7 +392,7 @@ void opcontrol()
             // ------------- START MATCH DRIVER CONTROLS --------------------
 
             int dir = (master.get_analog(ANALOG_LEFT_Y));
-            int turn = joystickCurve(master.get_analog(ANALOG_RIGHT_X));
+            int turn = joystickCurveSkills(master.get_analog(ANALOG_RIGHT_X));
             left_mg.move((dir + turn) * drivetrain_slow);
             right_mg.move((dir - turn) * drivetrain_slow);
 

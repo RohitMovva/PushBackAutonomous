@@ -234,7 +234,7 @@ void Robot::processAction(const ActionPoint &ap)
 
     if (intake_action == 3){
         m_intake->set_state(15);
-        m_intake->state_decay(15, 16, 1250);
+        m_intake->state_decay(15, 16, 700);
     }
 
     if (ap.actions[1] == 1.0)
